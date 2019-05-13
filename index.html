@@ -344,7 +344,7 @@
   
   
   <div class="post-block">
-    <link itemprop="mainEntityOfPage" href="http://yoursite.com/2019/05/13/hello-world/">
+    <link itemprop="mainEntityOfPage" href="http://yoursite.com/2019/05/13/React-Native源码分析——Virtual-DOM/">
 
     <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
       <meta itemprop="name" content="Alex Ting">
@@ -364,7 +364,7 @@
           <h1 class="post-title" itemprop="name headline">
                 
                 
-                <a href="/2019/05/13/hello-world/" class="post-title-link" itemprop="url">Hello World</a>
+                <a href="/2019/05/13/React-Native源码分析——Virtual-DOM/" class="post-title-link" itemprop="url">React Native源码分析——Virtual DOM</a>
               
             
           </h1>
@@ -389,7 +389,7 @@
                 
               
 
-              <time title="Created: 2019-05-13 19:27:58 / Modified: 20:39:09" itemprop="dateCreated datePublished" datetime="2019-05-13T19:27:58+08:00">2019-05-13</time>
+              <time title="Created: 2019-05-13 21:20:00 / Modified: 21:20:42" itemprop="dateCreated datePublished" datetime="2019-05-13T21:20:00+08:00">2019-05-13</time>
             
 
             
@@ -411,7 +411,7 @@
                 <span class="post-meta-item-text">In</span>
               
               
-                <span itemprop="about" itemscope itemtype="http://schema.org/Thing"><a href="/categories/ios/" itemprop="url" rel="index"><span itemprop="name">ios</span></a></span>
+                <span itemprop="about" itemscope itemtype="http://schema.org/Thing"><a href="/categories/React-Native/" itemprop="url" rel="index"><span itemprop="name">React Native</span></a></span>
 
                 
                 
@@ -448,15 +448,1342 @@
       
         
           
-            <p>Welcome to <a href="https://hexo.io/" target="_blank" rel="noopener">Hexo</a>! This is your very first post. Check <a href="https://hexo.io/docs/" target="_blank" rel="noopener">documentation</a> for more info. If you get any problems when using Hexo, you can find the answer in <a href="https://hexo.io/docs/troubleshooting.html" target="_blank" rel="noopener">troubleshooting</a> or you can ask me on <a href="https://github.com/hexojs/hexo/issues" target="_blank" rel="noopener">GitHub</a>.</p>
-<h2 id="Quick-Start"><a href="#Quick-Start" class="headerlink" title="Quick Start"></a>Quick Start</h2><h3 id="Create-a-new-post"><a href="#Create-a-new-post" class="headerlink" title="Create a new post"></a>Create a new post</h3><figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">$ hexo new <span class="string">"My New Post"</span></span><br></pre></td></tr></table></figure>
-<p>More info: <a href="https://hexo.io/docs/writing.html" target="_blank" rel="noopener">Writing</a></p>
-<h3 id="Run-server"><a href="#Run-server" class="headerlink" title="Run server"></a>Run server</h3><figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">$ hexo server</span><br></pre></td></tr></table></figure>
-<p>More info: <a href="https://hexo.io/docs/server.html" target="_blank" rel="noopener">Server</a></p>
-<h3 id="Generate-static-files"><a href="#Generate-static-files" class="headerlink" title="Generate static files"></a>Generate static files</h3><figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">$ hexo generate</span><br></pre></td></tr></table></figure>
-<p>More info: <a href="https://hexo.io/docs/generating.html" target="_blank" rel="noopener">Generating</a></p>
-<h3 id="Deploy-to-remote-sites"><a href="#Deploy-to-remote-sites" class="headerlink" title="Deploy to remote sites"></a>Deploy to remote sites</h3><figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">$ hexo deploy</span><br></pre></td></tr></table></figure>
-<p>More info: <a href="https://hexo.io/docs/deployment.html" target="_blank" rel="noopener">Deployment</a></p>
+            <blockquote>
+<p>本文基于0.58.5分析React Native Reconciliation过程</p>
+</blockquote>
+<h1 id="Components、Elements和Instances"><a href="#Components、Elements和Instances" class="headerlink" title="Components、Elements和Instances"></a>Components、Elements和Instances</h1><p>讲Virtual DOM之前，先讲下React Native几个核心概念和这样设计的目的。在面向对象的UI开发时，要渲染一个UI时，都要自己创建UI对象，并且管理对象引用，例如iOS上要渲染一个UIView：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">UIView *view= [UIView new];</span><br><span class="line">UILabel *label= [UILabel new];</span><br><span class="line">label.text = @&quot;test&quot;;</span><br><span class="line">[view addSubview:label];</span><br></pre></td></tr></table></figure>
+<p>这种设计模式带来的问题是开发者必须自己创建、更新UI对象，当UI复杂时，维护成本会急剧增加。<br>React使用一种非常巧妙的设计模式来解决上面问题，UI开发时，只需要描述UI界面，引擎会根据描述自动创建具体的实例，在更新时也只需更新UI界面描述。这样开发者就从复杂的UI对象创建、更新中解放出来，开发者只需要关注UI长怎样和核心逻辑，React帮你搞定对象创建和维护，React通过Components、Elements和Instances来实现这种模式。</p>
+<h4 id="Elements"><a href="#Elements" class="headerlink" title="Elements"></a>Elements</h4><p>Element是用来描述UI的js对象，Element只有type和props两个属性，Element创建成本很低，一旦创建就不可变，Component更新到时候会创建新的Element。Element可以嵌套，React会递归解析Element直到叶子结点，这样就得到一颗Element树，这颗树就是Virtual DOM树，React通过diff等算法后把Virtual DOM渲染到屏幕，渲染过程做了很多优化。可以通过render()或者其他方法返回Element，例如：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line">render() &#123;</span><br><span class="line">  return(</span><br><span class="line">    &lt;View style = &#123;&#123;height:200,backgroundColor:&apos;#999999&apos;&#125;&#125;&gt;</span><br><span class="line">      &lt;Text&gt; test &lt;/Text&gt;</span><br><span class="line">   &lt;/View&gt;</span><br><span class="line">  )</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>上述JSX语法最终会转换成以下Element：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br></pre></td><td class="code"><pre><span class="line">&#123;</span><br><span class="line">  type:View,</span><br><span class="line">  props: &#123;</span><br><span class="line">    style:&#123;height:200,backgroundColor:&apos;#999999&apos;&#125;,</span><br><span class="line">    children: &#123;</span><br><span class="line">      type:Text,</span><br><span class="line">      props: &#123;</span><br><span class="line">        children:&apos;test&apos;</span><br><span class="line">      &#125;</span><br><span class="line">    &#125;</span><br><span class="line">  &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<h4 id="Components"><a href="#Components" class="headerlink" title="Components"></a>Components</h4><p>Component是生成Element的对象，可以是个class，也可以是简单的方法。当Component是class的时候，可以存储state和其他属性，实现复杂的逻辑；当Component是方法的时候，是不可变的Component，相当于只有render()方法的class Component。</p>
+<h4 id="Instances"><a href="#Instances" class="headerlink" title="Instances"></a>Instances</h4><p>Instance就是Component 实例，React Native开发过程不用自己管理Instance，React引擎自动创建并维护Instance，具体创建逻辑下文详细介绍。</p>
+<h1 id="Virtual-DOM"><a href="#Virtual-DOM" class="headerlink" title="Virtual DOM"></a>Virtual DOM</h1><p>通常所说的<em><a href="https://reactjs.org/docs/faq-internals.html" target="_blank" rel="noopener">Virtual DOM</a></em>是指相对于<em>Real DOM</em>的element树，Virtual DOM是最初React版本的说法，最开始React只是用在前端，引入Virtual DOM的概念是为了提升UI渲染性能，在UI变化的时候可以先比较Virtual DOM，只更新有变化的Real DOM。</p>
+<h1 id="Reconciliation"><a href="#Reconciliation" class="headerlink" title="Reconciliation"></a>Reconciliation</h1><p>React之所以有这么好的渲染性能，主要是因为在UI变化的时候可以先比较Virtual DOM，只更新有变化的Real DOM，整个更新过程叫<em><a href="https://reactjs.org/docs/reconciliation.html" target="_blank" rel="noopener">Reconciliation</a></em>。</p>
+<h4 id="Fiber"><a href="#Fiber" class="headerlink" title="Fiber"></a>Fiber</h4><p>React 16重构了Reconciliation 实现，新框架叫<strong>Fiber</strong>，Facebook团结花了两年时间实现Fiber，核心优化就是使用<em>Vitual Stack</em>的概念。Fiber之前更新UI的时候是通过同步递归的方式遍历Virtual DOM树，整个过程是同步的，并且在遍历结束之前无法中断，这样在动画的时候就可能导致卡顿。Fiber使用<em>Vitual Stack</em>的概念，把同步递归操作分解成一个个异步、可中断的操作单元，从而解决卡顿问题，并且随时可以取消不需要的操作。</p>
+<h4 id="UI更新"><a href="#UI更新" class="headerlink" title="UI更新"></a>UI更新</h4><p>React Native UI更新主要可以分为以下两个阶段：</p>
+<ul>
+<li>Render</li>
+<li>Commit</li>
+</ul>
+<p>Render过程计算新的element树，render()方法在这个阶段调用的；Commit过程调用diff算法，更新实际发生变化的UI。<br>Render 阶段核心方法调用顺序：</p>
+<ul>
+<li>componentWillReceiveProps</li>
+<li>getDerivedStateFromProps</li>
+<li>shouldComponentUpdate</li>
+<li>componentWillUpdate</li>
+<li>render()</li>
+<li>reconcileChildren()</li>
+</ul>
+<p>Commit 阶段核心方法调用顺序：</p>
+<ul>
+<li>getSnapshotBeforeUpdate</li>
+<li>diff</li>
+<li>updateView</li>
+<li>componentDidUpdate</li>
+</ul>
+<p><em>componentWillReceiveProps和componentWillUpdate已经废弃，不推荐使用了，使用getDerivedStateFromProps和getSnapshotBeforeUpdate代替</em><br><strong>updateView</strong>方法调用RCTUIManager.updateView更新Native View。</p>
+<h1 id="Reconciliation源码分析"><a href="#Reconciliation源码分析" class="headerlink" title="Reconciliation源码分析"></a>Reconciliation源码分析</h1><p>接下来以<a href="https://reactnative.cn/docs/state/" target="_blank" rel="noopener"><strong>setState</strong></a>方法为切入点分析，分析React Native Reconciliation过程，主要分析UI更新过程，并不深入Fiber细节。</p>
+<h4 id="setState"><a href="#setState" class="headerlink" title="setState"></a>setState</h4><figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line">  _callback() &#123;</span><br><span class="line">    console.log(&apos;callback&apos;);</span><br><span class="line">  &#125;</span><br><span class="line"></span><br><span class="line">  _onPress1() &#123;</span><br><span class="line">      this.setState(previousState =&gt; (</span><br><span class="line">          &#123; value:  previousState.value+1&#125;</span><br><span class="line">        ), this._callback.bind(this));</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>上面代码是React Native上更新UI的最常用方法，我们知道setState是异步调用的，<strong>但state是什么时机更新？callback又什么时机调用呢？又是怎么触发Virtual DOM树和UI更新的呢？</strong></p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">//react.development.js:333</span><br><span class="line">Component.prototype.setState = function (partialState, callback) &#123;</span><br><span class="line">  !(typeof partialState === &apos;object&apos; || typeof partialState === &apos;function&apos; || partialState == null) ? invariant(false, &apos;setState(...): takes an object of state variables to update or a function which returns an object of state variables.&apos;) : void 0;</span><br><span class="line">  this.updater.enqueueSetState(this, partialState, callback, &apos;setState&apos;);</span><br><span class="line">&#125;;</span><br></pre></td></tr></table></figure>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br></pre></td><td class="code"><pre><span class="line">//ReactNativeRender-dev.js:8456</span><br><span class="line">var classComponentUpdater = &#123;</span><br><span class="line">  isMounted: isMounted,</span><br><span class="line">  enqueueSetState: function(inst, payload, callback) &#123;</span><br><span class="line">    var fiber = get$1(inst);</span><br><span class="line">    var currentTime = requestCurrentTime();</span><br><span class="line">    var expirationTime = computeExpirationForFiber(currentTime, fiber);</span><br><span class="line"></span><br><span class="line">    var update = createUpdate(expirationTime);</span><br><span class="line">    update.payload = payload;</span><br><span class="line">    if (callback !== undefined &amp;&amp; callback !== null) &#123;</span><br><span class="line">      &#123;</span><br><span class="line">        warnOnInvalidCallback(callback, &quot;setState&quot;);</span><br><span class="line">      &#125;</span><br><span class="line">      update.callback = callback;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    flushPassiveEffects();</span><br><span class="line">    enqueueUpdate(fiber, update);</span><br><span class="line">    scheduleWork(fiber, expirationTime);</span><br><span class="line">  &#125;</span><br><span class="line">  ...</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>React可以用在Web、Node、React Native，底层updater指向具体实现，React Native上就是classComponentUpdater。<br>可以看到setState最终会创建一个update结构，其中payload就是更新state的匿名方法，然后插入队列，payload和callback将在后面异步执行。</p>
+<h4 id="element树更新"><a href="#element树更新" class="headerlink" title="element树更新"></a>element树更新</h4><p>前文说过Render过程计算新的element树，render()方法在这个阶段调用的，先看一下函数调用栈：</p>
+<p><img src="https://upload-images.jianshu.io/upload_images/1368199-daac121a1cce22b5.png?imageMogr2/auto-orient/strip%7CimageView2/2/w/1240" alt="Render阶段函数调用栈"></p>
+<p>通过函数名可以猜测更新过程会把异步处理批量更新，这样可以提高性能，接下来分析Render过程核心方法。</p>
+<h4 id="performWorkOnRoot"><a href="#performWorkOnRoot" class="headerlink" title="performWorkOnRoot"></a>performWorkOnRoot</h4><figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br></pre></td><td class="code"><pre><span class="line">//ReactNativeRender-dev.js:17168</span><br><span class="line">function performWorkOnRoot(root, expirationTime, isYieldy) &#123;</span><br><span class="line">  // Check if this is async work or sync/expired work.</span><br><span class="line">  if (!isYieldy) &#123;</span><br><span class="line">    // Flush work without yielding.</span><br><span class="line">    // TODO: Non-yieldy work does not necessarily imply expired work. A renderer</span><br><span class="line">    // may want to perform some work without yielding, but also without</span><br><span class="line">    // requiring the root to complete (by triggering placeholders).</span><br><span class="line"></span><br><span class="line">    var finishedWork = root.finishedWork;</span><br><span class="line">    if (finishedWork !== null) &#123;</span><br><span class="line">      // This root is already complete. We can commit it.</span><br><span class="line">      completeRoot(root, finishedWork, expirationTime);</span><br><span class="line">    &#125; else &#123;</span><br><span class="line">      root.finishedWork = null;</span><br><span class="line">      // If this root previously suspended, clear its existing timeout, since</span><br><span class="line">      // we&apos;re about to try rendering again.</span><br><span class="line">      var timeoutHandle = root.timeoutHandle;</span><br><span class="line">      if (timeoutHandle !== noTimeout) &#123;</span><br><span class="line">        root.timeoutHandle = noTimeout;</span><br><span class="line">        // $FlowFixMe Complains noTimeout is not a TimeoutID, despite the check above</span><br><span class="line">        cancelTimeout(timeoutHandle);</span><br><span class="line">      &#125;</span><br><span class="line">      renderRoot(root, isYieldy);</span><br><span class="line">      finishedWork = root.finishedWork;</span><br><span class="line">      if (finishedWork !== null) &#123;</span><br><span class="line">        // We&apos;ve completed the root. Commit it.</span><br><span class="line">        completeRoot(root, finishedWork, expirationTime);</span><br><span class="line">      &#125;</span><br><span class="line">    &#125;</span><br><span class="line">  &#125;</span><br><span class="line">  ...</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>performWorkOnRoot是UI更新的入口方法，React Native上isYieldy直接传的false。<em>每次更新的时候都会从最顶端的节点开始计算新的element树，不管是哪个节点调的setState，但没变化的节点并不会重新计算，而是直接重用。但如果父节点发生变化，则所有字节的都会进行重新计算，而不管子节点是否变化，除非子节点shouldComponentUpdate返回false，或者子节点是PureReactComponent。</em><br><strong>renderRoot</strong>就是Render阶段入口方法，<strong>completeRoot</strong>则是Commit阶段入口方法。</p>
+<h4 id="workLoop"><a href="#workLoop" class="headerlink" title="workLoop"></a>workLoop</h4><figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br></pre></td><td class="code"><pre><span class="line">//ReactNativeRender-dev.js:16111</span><br><span class="line">function workLoop(isYieldy) &#123;</span><br><span class="line">  if (!isYieldy) &#123;</span><br><span class="line">    // Flush work without yielding</span><br><span class="line">    while (nextUnitOfWork !== null) &#123;</span><br><span class="line">      nextUnitOfWork = performUnitOfWork(nextUnitOfWork);</span><br><span class="line">    &#125;</span><br><span class="line">  &#125; else &#123;</span><br><span class="line">    // Flush asynchronous work until there&apos;s a higher priority event</span><br><span class="line">    while (nextUnitOfWork !== null &amp;&amp; !shouldYieldToRenderer()) &#123;</span><br><span class="line">      nextUnitOfWork = performUnitOfWork(nextUnitOfWork);</span><br><span class="line">    &#125;</span><br><span class="line">  &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>workLoop方法就是遍历整颗element树，React 16重构了Reconciliation 实现，新框架叫Fiber，Fiber使用<em>Vitual Stack</em>的概念，把同步递归操作分解成一个个异步、可中断的操作单元，每个操作单元就是一个节点计算过程。<br>performUnitOfWork就是具体节点计算，每次执行完会通过深度优先返回下一个需要执行的节点，这样就可以遍历整个节点树了。</p>
+<h4 id="performUnitOfWork"><a href="#performUnitOfWork" class="headerlink" title="performUnitOfWork"></a>performUnitOfWork</h4><figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br></pre></td><td class="code"><pre><span class="line">//ReactNativeRender-dev.js:16049</span><br><span class="line">function performUnitOfWork(workInProgress) &#123;</span><br><span class="line">  // The current, flushed, state of this fiber is the alternate.</span><br><span class="line">  // Ideally nothing should rely on this, but relying on it here</span><br><span class="line">  // means that we don&apos;t need an additional field on the work in</span><br><span class="line">  // progress.</span><br><span class="line">  var current$$1 = workInProgress.alternate;</span><br><span class="line">...</span><br><span class="line">  var next = void 0;</span><br><span class="line">  if (enableProfilerTimer) &#123;</span><br><span class="line">    if (workInProgress.mode &amp; ProfileMode) &#123;</span><br><span class="line">      startProfilerTimer(workInProgress);</span><br><span class="line">    &#125;</span><br><span class="line">    next = beginWork(current$$1, workInProgress, nextRenderExpirationTime);</span><br><span class="line">    workInProgress.memoizedProps = workInProgress.pendingProps;</span><br><span class="line">...</span><br><span class="line">  if (next === null) &#123;</span><br><span class="line">    // If this doesn&apos;t spawn new work, complete the current work.</span><br><span class="line">    next = completeUnitOfWork(workInProgress);</span><br><span class="line">  &#125;</span><br><span class="line">  ReactCurrentOwner$2.current = null;</span><br><span class="line">  return next;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>performUnitOfWork主要就是调用beginWork方法，然后更新props。</p>
+<h5 id="beginWork"><a href="#beginWork" class="headerlink" title="beginWork"></a>beginWork</h5><figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br></pre></td><td class="code"><pre><span class="line">//ReactNativeRender-dev.js:12601</span><br><span class="line">function beginWork(current$$1, workInProgress, renderExpirationTime) &#123;</span><br><span class="line">  var updateExpirationTime = workInProgress.expirationTime;</span><br><span class="line"></span><br><span class="line">  if (current$$1 !== null) &#123;</span><br><span class="line">    var oldProps = current$$1.memoizedProps;</span><br><span class="line">    var newProps = workInProgress.pendingProps;</span><br><span class="line">    if (</span><br><span class="line">      oldProps === newProps &amp;&amp;</span><br><span class="line">      !hasContextChanged() &amp;&amp;</span><br><span class="line">      updateExpirationTime &lt; renderExpirationTime</span><br><span class="line">    ) &#123;</span><br><span class="line">      // This fiber does not have any pending work. Bailout without entering</span><br><span class="line">      // the begin phase. There&apos;s still some bookkeeping we that needs to be done</span><br><span class="line">      // in this optimized path, mostly pushing stuff onto the stack.</span><br><span class="line">      switch (workInProgress.tag) &#123;</span><br><span class="line">        ...</span><br><span class="line">        case ClassComponent: &#123;</span><br><span class="line">          var Component = workInProgress.type;</span><br><span class="line">          if (isContextProvider(Component)) &#123;</span><br><span class="line">            pushContextProvider(workInProgress);</span><br><span class="line">          &#125;</span><br><span class="line">          break;</span><br><span class="line">        &#125;</span><br><span class="line">        ...</span><br><span class="line">      return bailoutOnAlreadyFinishedWork(</span><br><span class="line">        current$$1,</span><br><span class="line">        workInProgress,</span><br><span class="line">        renderExpirationTime</span><br><span class="line">      );</span><br><span class="line">    &#125;</span><br><span class="line">  &#125;</span><br><span class="line"></span><br><span class="line">  // Before entering the begin phase, clear the expiration time.</span><br><span class="line">  workInProgress.expirationTime = NoWork;</span><br><span class="line"></span><br><span class="line">  switch (workInProgress.tag) &#123;</span><br><span class="line">    ...</span><br><span class="line">    case ClassComponent: &#123;</span><br><span class="line">      var _Component2 = workInProgress.type;</span><br><span class="line">      var _unresolvedProps = workInProgress.pendingProps;</span><br><span class="line">      var _resolvedProps =</span><br><span class="line">        workInProgress.elementType === _Component2</span><br><span class="line">          ? _unresolvedProps</span><br><span class="line">          : resolveDefaultProps(_Component2, _unresolvedProps);</span><br><span class="line">      return updateClassComponent(</span><br><span class="line">        current$$1,</span><br><span class="line">        workInProgress,</span><br><span class="line">        _Component2,</span><br><span class="line">        _resolvedProps,</span><br><span class="line">        renderExpirationTime</span><br><span class="line">      );</span><br><span class="line">    &#125;</span><br><span class="line">    ...</span><br><span class="line">  &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>可以看到beginWork主要是两个分支，每个分支都是一个很大switch case语句，第一个分支处理节点没变化的情况，这个时候不会进行计算，第二个分支处理节点发生变化的情况。每个switch case处理不同类型的节点，这里只分析ClassComponent类型。<br>最终会调用updateClassComponent方法更新发生变化的节点。</p>
+<h4 id="updateClassComponent"><a href="#updateClassComponent" class="headerlink" title="updateClassComponent"></a>updateClassComponent</h4><figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br><span class="line">60</span><br><span class="line">61</span><br><span class="line">62</span><br><span class="line">63</span><br><span class="line">64</span><br><span class="line">65</span><br></pre></td><td class="code"><pre><span class="line">//ReactNativeRender-dev.js:11457</span><br><span class="line">function updateClassComponent(</span><br><span class="line">  current$$1,</span><br><span class="line">  workInProgress,</span><br><span class="line">  Component,</span><br><span class="line">  nextProps,</span><br><span class="line">  renderExpirationTime</span><br><span class="line">) &#123;</span><br><span class="line">  &#123;</span><br><span class="line">   ...</span><br><span class="line">  var instance = workInProgress.stateNode;</span><br><span class="line">  var shouldUpdate = void 0;</span><br><span class="line">  if (instance === null) &#123;</span><br><span class="line">    if (current$$1 !== null) &#123;</span><br><span class="line">      // An class component without an instance only mounts if it suspended</span><br><span class="line">      // inside a non- concurrent tree, in an inconsistent state. We want to</span><br><span class="line">      // tree it like a new mount, even though an empty version of it already</span><br><span class="line">      // committed. Disconnect the alternate pointers.</span><br><span class="line">      current$$1.alternate = null;</span><br><span class="line">      workInProgress.alternate = null;</span><br><span class="line">      // Since this is conceptually a new fiber, schedule a Placement effect</span><br><span class="line">      workInProgress.effectTag |= Placement;</span><br><span class="line">    &#125;</span><br><span class="line">    // In the initial pass we might need to construct the instance.</span><br><span class="line">    constructClassInstance(</span><br><span class="line">      workInProgress,</span><br><span class="line">      Component,</span><br><span class="line">      nextProps,</span><br><span class="line">      renderExpirationTime</span><br><span class="line">    );</span><br><span class="line">    mountClassInstance(</span><br><span class="line">      workInProgress,</span><br><span class="line">      Component,</span><br><span class="line">      nextProps,</span><br><span class="line">      renderExpirationTime</span><br><span class="line">    );</span><br><span class="line">    shouldUpdate = true;</span><br><span class="line">  &#125; else if (current$$1 === null) &#123;</span><br><span class="line">    // In a resume, we&apos;ll already have an instance we can reuse.</span><br><span class="line">    shouldUpdate = resumeMountClassInstance(</span><br><span class="line">      workInProgress,</span><br><span class="line">      Component,</span><br><span class="line">      nextProps,</span><br><span class="line">      renderExpirationTime</span><br><span class="line">    );</span><br><span class="line">  &#125; else &#123;</span><br><span class="line">    shouldUpdate = updateClassInstance(</span><br><span class="line">      current$$1,</span><br><span class="line">      workInProgress,</span><br><span class="line">      Component,</span><br><span class="line">      nextProps,</span><br><span class="line">      renderExpirationTime</span><br><span class="line">    );</span><br><span class="line">  &#125;</span><br><span class="line">  var nextUnitOfWork = finishClassComponent(</span><br><span class="line">    current$$1,</span><br><span class="line">    workInProgress,</span><br><span class="line">    Component,</span><br><span class="line">    shouldUpdate,</span><br><span class="line">    hasContext,</span><br><span class="line">    renderExpirationTime</span><br><span class="line">  );</span><br><span class="line"> ...</span><br><span class="line">  return nextUnitOfWork;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>updateClassComponent会判断Component是否实例化，如果没有实例化的话会创建Component实例，这也是前文说的React引擎自动创建Instance的时机，如果已经实例化则调用updateClassInstance更新实例，updateClassInstance会返回该实例是否真正需要更新，并更新props和state。最后会调用finishClassComponent更新element并返回下一个计算单元。</p>
+<h4 id="updateClassInstance"><a href="#updateClassInstance" class="headerlink" title="updateClassInstance"></a>updateClassInstance</h4><figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br><span class="line">60</span><br><span class="line">61</span><br><span class="line">62</span><br><span class="line">63</span><br><span class="line">64</span><br><span class="line">65</span><br><span class="line">66</span><br><span class="line">67</span><br><span class="line">68</span><br><span class="line">69</span><br><span class="line">70</span><br><span class="line">71</span><br><span class="line">72</span><br><span class="line">73</span><br><span class="line">74</span><br><span class="line">75</span><br><span class="line">76</span><br><span class="line">77</span><br><span class="line">78</span><br><span class="line">79</span><br><span class="line">80</span><br><span class="line">81</span><br><span class="line">82</span><br><span class="line">83</span><br><span class="line">84</span><br><span class="line">85</span><br><span class="line">86</span><br><span class="line">87</span><br><span class="line">88</span><br><span class="line">89</span><br><span class="line">90</span><br><span class="line">91</span><br><span class="line">92</span><br><span class="line">93</span><br><span class="line">94</span><br><span class="line">95</span><br><span class="line">96</span><br><span class="line">97</span><br><span class="line">98</span><br><span class="line">99</span><br><span class="line">100</span><br><span class="line">101</span><br><span class="line">102</span><br><span class="line">103</span><br><span class="line">104</span><br><span class="line">105</span><br><span class="line">106</span><br><span class="line">107</span><br><span class="line">108</span><br><span class="line">109</span><br><span class="line">110</span><br><span class="line">111</span><br><span class="line">112</span><br><span class="line">113</span><br><span class="line">114</span><br><span class="line">115</span><br><span class="line">116</span><br><span class="line">117</span><br><span class="line">118</span><br><span class="line">119</span><br><span class="line">120</span><br><span class="line">121</span><br><span class="line">122</span><br><span class="line">123</span><br><span class="line">124</span><br><span class="line">125</span><br><span class="line">126</span><br><span class="line">127</span><br><span class="line">128</span><br><span class="line">129</span><br><span class="line">130</span><br><span class="line">131</span><br><span class="line">132</span><br><span class="line">133</span><br><span class="line">134</span><br><span class="line">135</span><br><span class="line">136</span><br><span class="line">137</span><br><span class="line">138</span><br><span class="line">139</span><br><span class="line">140</span><br><span class="line">141</span><br><span class="line">142</span><br><span class="line">143</span><br><span class="line">144</span><br><span class="line">145</span><br><span class="line">146</span><br><span class="line">147</span><br><span class="line">148</span><br><span class="line">149</span><br><span class="line">150</span><br><span class="line">151</span><br><span class="line">152</span><br><span class="line">153</span><br><span class="line">154</span><br><span class="line">155</span><br><span class="line">156</span><br><span class="line">157</span><br><span class="line">158</span><br><span class="line">159</span><br><span class="line">160</span><br><span class="line">161</span><br><span class="line">162</span><br><span class="line">163</span><br><span class="line">164</span><br><span class="line">165</span><br><span class="line">166</span><br><span class="line">167</span><br><span class="line">168</span><br><span class="line">169</span><br><span class="line">170</span><br><span class="line">171</span><br><span class="line">172</span><br><span class="line">173</span><br><span class="line">174</span><br><span class="line">175</span><br><span class="line">176</span><br></pre></td><td class="code"><pre><span class="line">//ReactNativeRender-dev.js:9282</span><br><span class="line">// Invokes the update life-cycles and returns false if it shouldn&apos;t rerender.</span><br><span class="line">function updateClassInstance(</span><br><span class="line">  current,</span><br><span class="line">  workInProgress,</span><br><span class="line">  ctor,</span><br><span class="line">  newProps,</span><br><span class="line">  renderExpirationTime</span><br><span class="line">) &#123;</span><br><span class="line">  var instance = workInProgress.stateNode;</span><br><span class="line"></span><br><span class="line">  var oldProps = workInProgress.memoizedProps;</span><br><span class="line">  instance.props =</span><br><span class="line">    workInProgress.type === workInProgress.elementType</span><br><span class="line">      ? oldProps</span><br><span class="line">      : resolveDefaultProps(workInProgress.type, oldProps);</span><br><span class="line"></span><br><span class="line">  var oldContext = instance.context;</span><br><span class="line">  var contextType = ctor.contextType;</span><br><span class="line">  var nextContext = void 0;</span><br><span class="line">  if (typeof contextType === &quot;object&quot; &amp;&amp; contextType !== null) &#123;</span><br><span class="line">    nextContext = readContext$1(contextType);</span><br><span class="line">  &#125; else &#123;</span><br><span class="line">    var nextUnmaskedContext = getUnmaskedContext(workInProgress, ctor, true);</span><br><span class="line">    nextContext = getMaskedContext(workInProgress, nextUnmaskedContext);</span><br><span class="line">  &#125;</span><br><span class="line"></span><br><span class="line">  var getDerivedStateFromProps = ctor.getDerivedStateFromProps;</span><br><span class="line">  var hasNewLifecycles =</span><br><span class="line">    typeof getDerivedStateFromProps === &quot;function&quot; ||</span><br><span class="line">    typeof instance.getSnapshotBeforeUpdate === &quot;function&quot;;</span><br><span class="line"></span><br><span class="line">  // Note: During these life-cycles, instance.props/instance.state are what</span><br><span class="line">  // ever the previously attempted to render - not the &quot;current&quot;. However,</span><br><span class="line">  // during componentDidUpdate we pass the &quot;current&quot; props.</span><br><span class="line"></span><br><span class="line">  // In order to support react-lifecycles-compat polyfilled components,</span><br><span class="line">  // Unsafe lifecycles should not be invoked for components using the new APIs.</span><br><span class="line">  if (</span><br><span class="line">    !hasNewLifecycles &amp;&amp;</span><br><span class="line">    (typeof instance.UNSAFE_componentWillReceiveProps === &quot;function&quot; ||</span><br><span class="line">      typeof instance.componentWillReceiveProps === &quot;function&quot;)</span><br><span class="line">  ) &#123;</span><br><span class="line">    if (oldProps !== newProps || oldContext !== nextContext) &#123;</span><br><span class="line">      callComponentWillReceiveProps(</span><br><span class="line">        workInProgress,</span><br><span class="line">        instance,</span><br><span class="line">        newProps,</span><br><span class="line">        nextContext</span><br><span class="line">      );</span><br><span class="line">    &#125;</span><br><span class="line">  &#125;</span><br><span class="line"></span><br><span class="line">  resetHasForceUpdateBeforeProcessing();</span><br><span class="line"></span><br><span class="line">//调用setState匿名方法更新state</span><br><span class="line">  var oldState = workInProgress.memoizedState;</span><br><span class="line">  var newState = (instance.state = oldState);</span><br><span class="line">  var updateQueue = workInProgress.updateQueue;</span><br><span class="line">  if (updateQueue !== null) &#123;</span><br><span class="line">    processUpdateQueue(</span><br><span class="line">      workInProgress,</span><br><span class="line">      updateQueue,</span><br><span class="line">      newProps,</span><br><span class="line">      instance,</span><br><span class="line">      renderExpirationTime</span><br><span class="line">    );</span><br><span class="line">    newState = workInProgress.memoizedState;</span><br><span class="line">  &#125;</span><br><span class="line"></span><br><span class="line">  if (</span><br><span class="line">    oldProps === newProps &amp;&amp;</span><br><span class="line">    oldState === newState &amp;&amp;</span><br><span class="line">    !hasContextChanged() &amp;&amp;</span><br><span class="line">    !checkHasForceUpdateAfterProcessing()</span><br><span class="line">  ) &#123;</span><br><span class="line">    // If an update was already in progress, we should schedule an Update</span><br><span class="line">    // effect even though we&apos;re bailing out, so that cWU/cDU are called.</span><br><span class="line">    if (typeof instance.componentDidUpdate === &quot;function&quot;) &#123;</span><br><span class="line">      if (</span><br><span class="line">        oldProps !== current.memoizedProps ||</span><br><span class="line">        oldState !== current.memoizedState</span><br><span class="line">      ) &#123;</span><br><span class="line">        workInProgress.effectTag |= Update;</span><br><span class="line">      &#125;</span><br><span class="line">    &#125;</span><br><span class="line">    if (typeof instance.getSnapshotBeforeUpdate === &quot;function&quot;) &#123;</span><br><span class="line">      if (</span><br><span class="line">        oldProps !== current.memoizedProps ||</span><br><span class="line">        oldState !== current.memoizedState</span><br><span class="line">      ) &#123;</span><br><span class="line">        workInProgress.effectTag |= Snapshot;</span><br><span class="line">      &#125;</span><br><span class="line">    &#125;</span><br><span class="line">    return false;</span><br><span class="line">  &#125;</span><br><span class="line"></span><br><span class="line">  if (typeof getDerivedStateFromProps === &quot;function&quot;) &#123;</span><br><span class="line">    applyDerivedStateFromProps(</span><br><span class="line">      workInProgress,</span><br><span class="line">      ctor,</span><br><span class="line">      getDerivedStateFromProps,</span><br><span class="line">      newProps</span><br><span class="line">    );</span><br><span class="line">    newState = workInProgress.memoizedState;</span><br><span class="line">  &#125;</span><br><span class="line"></span><br><span class="line">  var shouldUpdate =</span><br><span class="line">    checkHasForceUpdateAfterProcessing() ||</span><br><span class="line">    checkShouldComponentUpdate(</span><br><span class="line">      workInProgress,</span><br><span class="line">      ctor,</span><br><span class="line">      oldProps,</span><br><span class="line">      newProps,</span><br><span class="line">      oldState,</span><br><span class="line">      newState,</span><br><span class="line">      nextContext</span><br><span class="line">    );</span><br><span class="line"></span><br><span class="line">  if (shouldUpdate) &#123;</span><br><span class="line">    // In order to support react-lifecycles-compat polyfilled components,</span><br><span class="line">    // Unsafe lifecycles should not be invoked for components using the new APIs.</span><br><span class="line">    if (</span><br><span class="line">      !hasNewLifecycles &amp;&amp;</span><br><span class="line">      (typeof instance.UNSAFE_componentWillUpdate === &quot;function&quot; ||</span><br><span class="line">        typeof instance.componentWillUpdate === &quot;function&quot;)</span><br><span class="line">    ) &#123;</span><br><span class="line">      startPhaseTimer(workInProgress, &quot;componentWillUpdate&quot;);</span><br><span class="line">      if (typeof instance.componentWillUpdate === &quot;function&quot;) &#123;</span><br><span class="line">        instance.componentWillUpdate(newProps, newState, nextContext);</span><br><span class="line">      &#125;</span><br><span class="line">      if (typeof instance.UNSAFE_componentWillUpdate === &quot;function&quot;) &#123;</span><br><span class="line">        instance.UNSAFE_componentWillUpdate(newProps, newState, nextContext);</span><br><span class="line">      &#125;</span><br><span class="line">      stopPhaseTimer();</span><br><span class="line">    &#125;</span><br><span class="line">    if (typeof instance.componentDidUpdate === &quot;function&quot;) &#123;</span><br><span class="line">      workInProgress.effectTag |= Update;</span><br><span class="line">    &#125;</span><br><span class="line">    if (typeof instance.getSnapshotBeforeUpdate === &quot;function&quot;) &#123;</span><br><span class="line">      workInProgress.effectTag |= Snapshot;</span><br><span class="line">    &#125;</span><br><span class="line">  &#125; else &#123;</span><br><span class="line">    // If an update was already in progress, we should schedule an Update</span><br><span class="line">    // effect even though we&apos;re bailing out, so that cWU/cDU are called.</span><br><span class="line">    if (typeof instance.componentDidUpdate === &quot;function&quot;) &#123;</span><br><span class="line">      if (</span><br><span class="line">        oldProps !== current.memoizedProps ||</span><br><span class="line">        oldState !== current.memoizedState</span><br><span class="line">      ) &#123;</span><br><span class="line">        workInProgress.effectTag |= Update;</span><br><span class="line">      &#125;</span><br><span class="line">    &#125;</span><br><span class="line">    if (typeof instance.getSnapshotBeforeUpdate === &quot;function&quot;) &#123;</span><br><span class="line">      if (</span><br><span class="line">        oldProps !== current.memoizedProps ||</span><br><span class="line">        oldState !== current.memoizedState</span><br><span class="line">      ) &#123;</span><br><span class="line">        workInProgress.effectTag |= Snapshot;</span><br><span class="line">      &#125;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    // If shouldComponentUpdate returned false, we should still update the</span><br><span class="line">    // memoized props/state to indicate that this work can be reused.</span><br><span class="line">    workInProgress.memoizedProps = newProps;</span><br><span class="line">    workInProgress.memoizedState = newState;</span><br><span class="line">  &#125;</span><br><span class="line"></span><br><span class="line">  // Update the existing instance&apos;s state, props, and context pointers even</span><br><span class="line">  // if shouldComponentUpdate returns false.</span><br><span class="line">  instance.props = newProps;</span><br><span class="line">  instance.state = newState;</span><br><span class="line">  instance.context = nextContext;</span><br><span class="line"></span><br><span class="line">  return shouldUpdate;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>updateClassInstance判断节点是否需要跟新，调用以下life-cycles方法：</p>
+<ul>
+<li>componentWillReceiveProps</li>
+<li>getDerivedStateFromProps</li>
+<li>shouldComponentUpdate</li>
+<li>componentWillUpdate</li>
+</ul>
+<p><strong>前文已经知道调用setState时会创建一个update结构，updateClassInstance 会调用processUpdateQueue方法计算新的state，processUpdateQueue方法里面会调用setState传的匿名函数</strong></p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br></pre></td><td class="code"><pre><span class="line">//ReactNativeRender-dev.js:8517</span><br><span class="line">function checkShouldComponentUpdate(</span><br><span class="line">  workInProgress,</span><br><span class="line">  ctor,</span><br><span class="line">  oldProps,</span><br><span class="line">  newProps,</span><br><span class="line">  oldState,</span><br><span class="line">  newState,</span><br><span class="line">  nextContext</span><br><span class="line">) &#123;</span><br><span class="line">  var instance = workInProgress.stateNode;</span><br><span class="line">  if (typeof instance.shouldComponentUpdate === &quot;function&quot;) &#123;</span><br><span class="line">    startPhaseTimer(workInProgress, &quot;shouldComponentUpdate&quot;);</span><br><span class="line">    var shouldUpdate = instance.shouldComponentUpdate(</span><br><span class="line">      newProps,</span><br><span class="line">      newState,</span><br><span class="line">      nextContext</span><br><span class="line">    );</span><br><span class="line">    stopPhaseTimer();</span><br><span class="line">    &#123;</span><br><span class="line">      !(shouldUpdate !== undefined)</span><br><span class="line">        ? warningWithoutStack$1(</span><br><span class="line">            false,</span><br><span class="line">            &quot;%s.shouldComponentUpdate(): Returned undefined instead of a &quot; +</span><br><span class="line">              &quot;boolean value. Make sure to return true or false.&quot;,</span><br><span class="line">            getComponentName(ctor) || &quot;Component&quot;</span><br><span class="line">          )</span><br><span class="line">        : void 0;</span><br><span class="line">    &#125;</span><br><span class="line">    return shouldUpdate;</span><br><span class="line">  &#125;</span><br><span class="line">  if (ctor.prototype &amp;&amp; ctor.prototype.isPureReactComponent) &#123;</span><br><span class="line">    return (</span><br><span class="line">      !shallowEqual(oldProps, newProps) || !shallowEqual(oldState, newState)</span><br><span class="line">    );</span><br><span class="line">  &#125;</span><br><span class="line">  return true;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>updateClassInstance调用checkShouldComponentUpdate判断是否需要更新，checkShouldComponentUpdate实现比较简单，</p>
+<ol>
+<li>如果Component实现shouldComponentUpdate方法，则调用shouldComponentUpdate；</li>
+<li>如果是PureReactComponent，则调用shallowEqual比较props和state是否变化；</li>
+<li>否则返回true</li>
+</ol>
+<p><strong>这里要注意checkShouldComponentUpdate默认返回true，所以只要父节点更新，默认就会更新所有子节点，这就是为什么可以通过shouldComponentUpdate返回false或使用PureReactComponent来提升性能。</strong></p>
+<h4 id="finishClassComponent"><a href="#finishClassComponent" class="headerlink" title="finishClassComponent"></a>finishClassComponent</h4><p>Render阶段最后就是调用finishClassComponent方法计算新的element，并且调用reconcileChildren遍历子节点，具体代码如下：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br></pre></td><td class="code"><pre><span class="line">//ReactNativeRender-dev.js:11562</span><br><span class="line">function finishClassComponent(</span><br><span class="line">  current$$1,</span><br><span class="line">  workInProgress,</span><br><span class="line">  Component,</span><br><span class="line">  shouldUpdate,</span><br><span class="line">  hasContext,</span><br><span class="line">  renderExpirationTime</span><br><span class="line">) &#123;</span><br><span class="line">...</span><br><span class="line">  if (!shouldUpdate &amp;&amp; !didCaptureError) &#123;</span><br><span class="line">    // Context providers should defer to sCU for rendering</span><br><span class="line">    if (hasContext) &#123;</span><br><span class="line">      invalidateContextProvider(workInProgress, Component, false);</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    return bailoutOnAlreadyFinishedWork(</span><br><span class="line">      current$$1,</span><br><span class="line">      workInProgress,</span><br><span class="line">      renderExpirationTime</span><br><span class="line">    );</span><br><span class="line">  &#125;</span><br><span class="line"></span><br><span class="line">  var instance = workInProgress.stateNode;</span><br><span class="line"></span><br><span class="line">  // Rerender</span><br><span class="line">  ReactCurrentOwner$3.current = workInProgress;</span><br><span class="line">  var nextChildren = void 0;</span><br><span class="line">  ...</span><br><span class="line">      setCurrentPhase(&quot;render&quot;);</span><br><span class="line">      nextChildren = instance.render();</span><br><span class="line"> ...</span><br><span class="line">    reconcileChildren(</span><br><span class="line">      current$$1,</span><br><span class="line">      workInProgress,</span><br><span class="line">      nextChildren,</span><br><span class="line">      renderExpirationTime</span><br><span class="line">    );</span><br><span class="line"></span><br><span class="line">  // Memoize state using the values we just used to render.</span><br><span class="line">  // TODO: Restructure so we never read values from the instance.</span><br><span class="line">  workInProgress.memoizedState = instance.state;</span><br><span class="line">  ...</span><br><span class="line">  return workInProgress.child;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>如果shouldUpdate为false，则直接重用现有节点，跟beginWork处理没变化的节点一样。<br>如果shouldUpdate为true，则调用render方法计算新的element，然后调用reconcileChildren遍历子节点。</p>
+<h4 id="completeUnitOfWork"><a href="#completeUnitOfWork" class="headerlink" title="completeUnitOfWork"></a>completeUnitOfWork</h4><p>在遍历到叶子节点后performUnitOfWork会调用completeUnitOfWork</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line">//ReactNativeRender-dev.js:16101</span><br><span class="line">function performUnitOfWork(workInProgress) &#123;</span><br><span class="line">  ...</span><br><span class="line">  if (next === null) &#123;</span><br><span class="line">    // If this doesn&apos;t spawn new work, complete the current work.</span><br><span class="line">    next = completeUnitOfWork(workInProgress);</span><br><span class="line">  &#125;</span><br><span class="line">  ...</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>completeUnitOfWork调用completeWork标记需要更新的节点，如果有兄弟节点则返回兄弟节点，继续遍历兄弟节点，否则标记父节点。</p>
+<h1 id="Commit-阶段源码分析"><a href="#Commit-阶段源码分析" class="headerlink" title="Commit 阶段源码分析"></a>Commit 阶段源码分析</h1><p>前文分析来Render阶段核心方法，Render阶段会生成一颗新的element树，并且生成一个Effect list，Effect list是一个线性列表，包含真正需要更新的操作，Commit 阶段则通过Effect list更新具体的UI，首先看下Commit 阶段的函数调用栈：</p>
+<p><img src="https://upload-images.jianshu.io/upload_images/1368199-ccb88914ff8a96a3.png?imageMogr2/auto-orient/strip%7CimageView2/2/w/1240" alt="Commit阶段函数调用栈"></p>
+<h4 id="commitAllHostEffects"><a href="#commitAllHostEffects" class="headerlink" title="commitAllHostEffects"></a>commitAllHostEffects</h4><figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br><span class="line">60</span><br><span class="line">61</span><br><span class="line">62</span><br><span class="line">63</span><br><span class="line">64</span><br><span class="line">65</span><br><span class="line">66</span><br></pre></td><td class="code"><pre><span class="line">//ReactNativeRender-dev.js:15349</span><br><span class="line">function commitAllHostEffects() &#123;</span><br><span class="line">  while (nextEffect !== null) &#123;</span><br><span class="line">    &#123;</span><br><span class="line">      setCurrentFiber(nextEffect);</span><br><span class="line">    &#125;</span><br><span class="line">    recordEffect();</span><br><span class="line"></span><br><span class="line">    var effectTag = nextEffect.effectTag;</span><br><span class="line"></span><br><span class="line">    if (effectTag &amp; ContentReset) &#123;</span><br><span class="line">      commitResetTextContent(nextEffect);</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    if (effectTag &amp; Ref) &#123;</span><br><span class="line">      var current$$1 = nextEffect.alternate;</span><br><span class="line">      if (current$$1 !== null) &#123;</span><br><span class="line">        commitDetachRef(current$$1);</span><br><span class="line">      &#125;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    // The following switch statement is only concerned about placement,</span><br><span class="line">    // updates, and deletions. To avoid needing to add a case for every</span><br><span class="line">    // possible bitmap value, we remove the secondary effects from the</span><br><span class="line">    // effect tag and switch on that value.</span><br><span class="line">    var primaryEffectTag = effectTag &amp; (Placement | Update | Deletion);</span><br><span class="line">    switch (primaryEffectTag) &#123;</span><br><span class="line">      case Placement: &#123;</span><br><span class="line">        commitPlacement(nextEffect);</span><br><span class="line">        // Clear the &quot;placement&quot; from effect tag so that we know that this is inserted, before</span><br><span class="line">        // any life-cycles like componentDidMount gets called.</span><br><span class="line">        // TODO: findDOMNode doesn&apos;t rely on this any more but isMounted</span><br><span class="line">        // does and isMounted is deprecated anyway so we should be able</span><br><span class="line">        // to kill this.</span><br><span class="line">        nextEffect.effectTag &amp;= ~Placement;</span><br><span class="line">        break;</span><br><span class="line">      &#125;</span><br><span class="line">      case PlacementAndUpdate: &#123;</span><br><span class="line">        // Placement</span><br><span class="line">        commitPlacement(nextEffect);</span><br><span class="line">        // Clear the &quot;placement&quot; from effect tag so that we know that this is inserted, before</span><br><span class="line">        // any life-cycles like componentDidMount gets called.</span><br><span class="line">        nextEffect.effectTag &amp;= ~Placement;</span><br><span class="line"></span><br><span class="line">        // Update</span><br><span class="line">        var _current = nextEffect.alternate;</span><br><span class="line">        commitWork(_current, nextEffect);</span><br><span class="line">        break;</span><br><span class="line">      &#125;</span><br><span class="line">      case Update: &#123;</span><br><span class="line">        var _current2 = nextEffect.alternate;</span><br><span class="line">        commitWork(_current2, nextEffect);</span><br><span class="line">        break;</span><br><span class="line">      &#125;</span><br><span class="line">      case Deletion: &#123;</span><br><span class="line">        commitDeletion(nextEffect);</span><br><span class="line">        break;</span><br><span class="line">      &#125;</span><br><span class="line">    &#125;</span><br><span class="line">    nextEffect = nextEffect.nextEffect;</span><br><span class="line">  &#125;</span><br><span class="line"></span><br><span class="line">  &#123;</span><br><span class="line">    resetCurrentFiber();</span><br><span class="line">  &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>commitAllHostEffects源码比较好理解，循环执行effect操作，effect操作可能是替换、删除、更新等</p>
+<h4 id="commitWork"><a href="#commitWork" class="headerlink" title="commitWork"></a>commitWork</h4><p>更新操作会调用commitWork，源码如下：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br><span class="line">60</span><br><span class="line">61</span><br></pre></td><td class="code"><pre><span class="line">//ReactNativeRender-dev.js:14628</span><br><span class="line">function commitWork(current$$1, finishedWork) &#123;</span><br><span class="line">  ...</span><br><span class="line">  switch (finishedWork.tag) &#123;</span><br><span class="line">    case FunctionComponent:</span><br><span class="line">    case ForwardRef:</span><br><span class="line">    case MemoComponent:</span><br><span class="line">    case SimpleMemoComponent: &#123;</span><br><span class="line">      // Note: We currently never use MountMutation, but useLayout uses</span><br><span class="line">      // UnmountMutation.</span><br><span class="line">      commitHookEffectList(UnmountMutation, MountMutation, finishedWork);</span><br><span class="line">      return;</span><br><span class="line">    &#125;</span><br><span class="line">    case ClassComponent: &#123;</span><br><span class="line">      return;</span><br><span class="line">    &#125;</span><br><span class="line">    case HostComponent: &#123;</span><br><span class="line">      var instance = finishedWork.stateNode;</span><br><span class="line">      if (instance != null) &#123;</span><br><span class="line">        // Commit the work prepared earlier.</span><br><span class="line">        var newProps = finishedWork.memoizedProps;</span><br><span class="line">        // For hydration we reuse the update path but we treat the oldProps</span><br><span class="line">        // as the newProps. The updatePayload will contain the real change in</span><br><span class="line">        // this case.</span><br><span class="line">        var oldProps =</span><br><span class="line">          current$$1 !== null ? current$$1.memoizedProps : newProps;</span><br><span class="line">        var type = finishedWork.type;</span><br><span class="line">        // TODO: Type the updateQueue to be specific to host components.</span><br><span class="line">        var updatePayload = finishedWork.updateQueue;</span><br><span class="line">        finishedWork.updateQueue = null;</span><br><span class="line">        if (updatePayload !== null) &#123;</span><br><span class="line">          commitUpdate(</span><br><span class="line">            instance,</span><br><span class="line">            updatePayload,</span><br><span class="line">            type,</span><br><span class="line">            oldProps,</span><br><span class="line">            newProps,</span><br><span class="line">            finishedWork</span><br><span class="line">          );</span><br><span class="line">        &#125;</span><br><span class="line">      &#125;</span><br><span class="line">      return;</span><br><span class="line">    &#125;</span><br><span class="line">    case HostText: &#123;</span><br><span class="line">      invariant(</span><br><span class="line">        finishedWork.stateNode !== null,</span><br><span class="line">        &quot;This should have a text node initialized. This error is likely &quot; +</span><br><span class="line">          &quot;caused by a bug in React. Please file an issue.&quot;</span><br><span class="line">      );</span><br><span class="line">      var textInstance = finishedWork.stateNode;</span><br><span class="line">      var newText = finishedWork.memoizedProps;</span><br><span class="line">      // For hydration we reuse the update path but we treat the oldProps</span><br><span class="line">      // as the newProps. The updatePayload will contain the real change in</span><br><span class="line">      // this case.</span><br><span class="line">      var oldText = current$$1 !== null ? current$$1.memoizedProps : newText;</span><br><span class="line">      commitTextUpdate(textInstance, oldText, newText);</span><br><span class="line">      return;</span><br><span class="line">    &#125;</span><br><span class="line">    ...</span><br><span class="line">  &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>React Native上Component都是由View、Text等基础Component组成的，所以最终实际更新的是View、Text等基础Component，最后会调用commitUpdate和commitTextUpdate完成实际的更新操作。</p>
+<h4 id="commitUpdate"><a href="#commitUpdate" class="headerlink" title="commitUpdate"></a>commitUpdate</h4><figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br></pre></td><td class="code"><pre><span class="line">//ReactNativeRender-dev.js:4153</span><br><span class="line">function commitUpdate(</span><br><span class="line">  instance,</span><br><span class="line">  updatePayloadTODO,</span><br><span class="line">  type,</span><br><span class="line">  oldProps,</span><br><span class="line">  newProps,</span><br><span class="line">  internalInstanceHandle</span><br><span class="line">) &#123;</span><br><span class="line">  var viewConfig = instance.viewConfig;</span><br><span class="line"></span><br><span class="line">  updateFiberProps(instance._nativeTag, newProps);</span><br><span class="line"></span><br><span class="line">  var updatePayload = diff(oldProps, newProps, viewConfig.validAttributes);</span><br><span class="line"></span><br><span class="line">  // Avoid the overhead of bridge calls if there&apos;s no update.</span><br><span class="line">  // This is an expensive no-op for Android, and causes an unnecessary</span><br><span class="line">  // view invalidation for certain components (eg RCTTextInput) on iOS.</span><br><span class="line">  if (updatePayload != null) &#123;</span><br><span class="line">    UIManager.updateView(</span><br><span class="line">      instance._nativeTag, // reactTag</span><br><span class="line">      viewConfig.uiViewClassName, // viewName</span><br><span class="line">      updatePayload // props</span><br><span class="line">    );</span><br><span class="line">  &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>commitUpdate源码比较好理解，首先调用diff判断是否需要更新，如果需要更新的话调用UIManager.updateView更新Native UI，其中UIManager.updateView是Native 暴露的module。diff方法主要是比较props是否变化：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line">//ReactNativeRender-dev.js:3638</span><br><span class="line">function diff(prevProps, nextProps, validAttributes) &#123;</span><br><span class="line">  return diffProperties(</span><br><span class="line">    null, // updatePayload</span><br><span class="line">    prevProps,</span><br><span class="line">    nextProps,</span><br><span class="line">    validAttributes</span><br><span class="line">  );</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<h4 id="commitTextUpdate"><a href="#commitTextUpdate" class="headerlink" title="commitTextUpdate"></a>commitTextUpdate</h4><figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line">//ReactNativeRender-dev.js:14659</span><br><span class="line">//ReactNativeRender-dev.js:4145</span><br><span class="line">function commitTextUpdate(textInstance, oldText, newText) &#123;</span><br><span class="line">  UIManager.updateView(</span><br><span class="line">    textInstance, // reactTag</span><br><span class="line">    &quot;RCTRawText&quot;, // viewName</span><br><span class="line">    &#123; text: newText &#125; // props</span><br><span class="line">  );</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>commitTextUpdate实现比较简单，因为<strong>completeWork</strong>方法标记TextComponent的时候已经判断了text是否变化，所以直接调用UIManager.updateView。</p>
+<h4 id="life-cycles方法调用"><a href="#life-cycles方法调用" class="headerlink" title="life-cycles方法调用"></a>life-cycles方法调用</h4><p>在更新完UI后将调用componentDidUpdate方法和setState callback方法，具体调用栈如下：<br><img src="https://upload-images.jianshu.io/upload_images/1368199-a1efa390cd9f5c3d.jpg?imageMogr2/auto-orient/strip%7CimageView2/2/w/1240" alt="componentDidUpdate调用栈"></p>
+<p><img src="https://upload-images.jianshu.io/upload_images/1368199-d428d051d135d0a9.jpg?imageMogr2/auto-orient/strip%7CimageView2/2/w/1240" alt="setState callback调用栈"></p>
+<h1 id="总结"><a href="#总结" class="headerlink" title="总结"></a>总结</h1><p>React Native Reconciliation过程比较复杂，Fiber框架把递归操作分解成一个个异步、可中断的操作单元后进一步复杂度。<br>Reconciliation主要可以分为以下两个阶段：</p>
+<ul>
+<li>Render</li>
+<li>Commit</li>
+</ul>
+<p>Render阶段从根节点开始遍历element树，对于不需要更新的节点直接重用fiber node，对于需要更新的节点，调用life-cycle方法，然后调用render方法计算新的element，最后调用reconcileChildren遍历子节点。<br>Render阶段还会标记更新，并且生成一个Effect list，Effect list是一个线性列表，包含真正需要更新的操作。<br>Commit 阶段通过Effect list更新具体的UI，这阶段会调用diff，然后调用UIManager.updateView更新Native View，最后调用componentDidUpdate方法和setState callback方法。</p>
+<p>#引用</p>
+<p><a href="https://medium.com/react-in-depth/inside-fiber-in-depth-overview-of-the-new-reconciliation-algorithm-in-react-e1c04700ef6e" target="_blank" rel="noopener">Inside Fiber: in-depth overview of the new reconciliation algorithm in React</a><br><a href="https://github.com/acdlite/react-fiber-architecture" target="_blank" rel="noopener">React Fiber Architecture</a><br><a href="https://reactjs.org/blog/2015/12/18/react-components-elements-and-instances.html" target="_blank" rel="noopener">React Components, Elements, and Instances</a><br><a href="https://reactjs.org/docs/reconciliation.html" target="_blank" rel="noopener">Reconciliation</a></p>
+
+          
+        
+      
+    </div>
+
+    
+
+    
+    
+    
+
+    
+
+    
+      
+    
+    
+
+    
+
+    <footer class="post-footer">
+      
+
+      
+
+      
+
+      
+      
+        <div class="post-eof"></div>
+      
+    </footer>
+  </div>
+  
+  
+  
+  </article>
+
+
+    
+      
+
+  
+
+  
+  
+  
+
+  
+
+  <article class="post post-type-normal" itemscope itemtype="http://schema.org/Article">
+  
+  
+  
+  <div class="post-block">
+    <link itemprop="mainEntityOfPage" href="http://yoursite.com/2019/05/13/objc-msgSend汇编源码分析/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="name" content="Alex Ting">
+      <meta itemprop="description" content="守护心中的那一亩田">
+      <meta itemprop="image" content="/images/avatar.gif">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Alex's Blog">
+    </span>
+
+    
+      <header class="post-header">
+
+        
+        
+          <h1 class="post-title" itemprop="name headline">
+                
+                
+                <a href="/2019/05/13/objc-msgSend汇编源码分析/" class="post-title-link" itemprop="url">objc_msgSend汇编源码分析</a>
+              
+            
+          </h1>
+        
+
+        <div class="post-meta">
+          <span class="post-time">
+
+            
+            
+            
+
+            
+              <span class="post-meta-item-icon">
+                <i class="fa fa-calendar-o"></i>
+              </span>
+              
+                <span class="post-meta-item-text">Posted on</span>
+              
+
+              
+                
+              
+
+              <time title="Created: 2019-05-13 21:19:00 / Modified: 21:19:45" itemprop="dateCreated datePublished" datetime="2019-05-13T21:19:00+08:00">2019-05-13</time>
+            
+
+            
+              
+
+              
+            
+          </span>
+
+          
+            <span class="post-category">
+            
+              <span class="post-meta-divider">|</span>
+            
+              <span class="post-meta-item-icon">
+                <i class="fa fa-folder-o"></i>
+              </span>
+              
+                <span class="post-meta-item-text">In</span>
+              
+              
+                <span itemprop="about" itemscope itemtype="http://schema.org/Thing"><a href="/categories/iOS/" itemprop="url" rel="index"><span itemprop="name">iOS</span></a></span>
+
+                
+                
+              
+            </span>
+          
+
+          
+            
+            
+          
+
+          
+          
+
+          
+
+          
+
+          
+
+        </div>
+      </header>
+    
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+      
+
+      
+        
+          
+            <h1 id="引言"><a href="#引言" class="headerlink" title="引言"></a>引言</h1><p>Objective-C是通过消息机制调用方法的，编译器会把所有消息发送转为objc_msgSend方法调用。说到objc_msgSend的汇编实现，大多数人会觉的是因为<strong>性能高才用汇编实现</strong>，几乎没有文章说其它原因。<strong>Objective-C所有方法都会转为objc_msgSend方法调用，然而每个方法参数和返回值都可能不一样，参数和返回值要怎么处理？</strong></p>
+<ul>
+<li><strong>本文首先会结合Objective-C Runtime机制深入分析objc_msgSend汇编实现。</strong></li>
+<li><strong>本文最后会从Calling Conventions角度分析objc_msgSend实现，利用Calling Conventions和汇编还可以实现很多黑科技。</strong></li>
+</ul>
+<h1 id="Objective-C对象结构"><a href="#Objective-C对象结构" class="headerlink" title="Objective-C对象结构"></a>Objective-C对象结构</h1><p>Objective-C中消息发送核心数据结构如下：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br><span class="line">60</span><br><span class="line">61</span><br><span class="line">62</span><br><span class="line">63</span><br></pre></td><td class="code"><pre><span class="line">//以下代码均为arm64平台</span><br><span class="line">typedef struct objc_class *Class;</span><br><span class="line">typedef struct objc_object *id;</span><br><span class="line"></span><br><span class="line">struct objc_object &#123;</span><br><span class="line">    isa_t isa;</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line">struct objc_class : objc_object &#123;</span><br><span class="line">    Class superclass;</span><br><span class="line">    cache_t cache;             // formerly cache pointer and vtable</span><br><span class="line">    class_data_bits_t bits;  //class_rw_t*</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line">@interface NSObject &lt;NSObject&gt; &#123;</span><br><span class="line">    Class isa  OBJC_ISA_AVAILABILITY;</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line">union isa_t </span><br><span class="line">&#123;</span><br><span class="line">    Class cls;</span><br><span class="line">    uintptr_t bits;</span><br><span class="line">#   define ISA_MASK        0x0000000ffffffff8ULL</span><br><span class="line">#   define ISA_MAGIC_MASK  0x000003f000000001ULL</span><br><span class="line">#   define ISA_MAGIC_VALUE 0x000001a000000001ULL</span><br><span class="line">    struct &#123;</span><br><span class="line">        uintptr_t nonpointer        : 1;</span><br><span class="line">        uintptr_t has_assoc         : 1;</span><br><span class="line">        uintptr_t has_cxx_dtor      : 1;</span><br><span class="line">        uintptr_t shiftcls          : 33; // MACH_VM_MAX_ADDRESS 0x1000000000</span><br><span class="line">        uintptr_t magic             : 6;</span><br><span class="line">        uintptr_t weakly_referenced : 1;</span><br><span class="line">        uintptr_t deallocating      : 1;</span><br><span class="line">        uintptr_t has_sidetable_rc  : 1;</span><br><span class="line">        uintptr_t extra_rc          : 19;</span><br><span class="line">    &#125;;</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line">struct cache_t &#123;</span><br><span class="line">    struct bucket_t *_buckets;</span><br><span class="line">    mask_t _mask;</span><br><span class="line">    mask_t _occupied;</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line">struct bucket_t &#123;</span><br><span class="line">    cache_key_t _key;//实际上是selector</span><br><span class="line">    IMP _imp; //实际上是函数指针</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line">struct class_rw_t &#123;</span><br><span class="line">    uint32_t flags;</span><br><span class="line">    uint32_t version;</span><br><span class="line">    const class_ro_t *ro;</span><br><span class="line">    method_array_t methods;</span><br><span class="line">    property_array_t properties;</span><br><span class="line">    protocol_array_t protocols;</span><br><span class="line">    Class firstSubclass;</span><br><span class="line">    Class nextSiblingClass;</span><br><span class="line">    char *demangledName;</span><br><span class="line">#if SUPPORT_INDEXED_ISA</span><br><span class="line">    uint32_t index;</span><br><span class="line">#endif</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>NSObject子类的实例都有个isa指针，isa指向Class，Class有superclass、cache、实例方法、属性、protocol等Runtime信息，调用实例方法的时候就是通过isa指针找到Class，然后找到IMP调用实际的方法。<br>Class本身也是一个对象，也有isa指针，指向meta-class，meta-class也是一个对象，有类方法等属性，调用类方法的时候，就是通过Class对象的isa指针找到meta-class，然后找到IMP调用实际的方法。<br>实例、Class、meta-class关系如下图，<a href="https://juejin.im/post/5a7e4d826fb9a0633d71d02d" target="_blank" rel="noopener">图片来源</a>：</p>
+<p><img src="https://upload-images.jianshu.io/upload_images/1368199-e9ed46f42de12566.png?imageMogr2/auto-orient/strip%7CimageView2/2/w/1240" alt="对象关系图"></p>
+<h1 id="消息机制"><a href="#消息机制" class="headerlink" title="消息机制"></a>消息机制</h1><p>当编译器遇到一个方法调用时，它会将方法的调用翻译成以下函数中的一个，<br>objc_msgSend、 objc_msgSend_stret、 objc_msgSendSuper 和 objc_msgSendSuper_stret。</p>
+<ul>
+<li>发送给对象的父类的消息会使用 objc_msgSendSuper ;</li>
+<li>有数据结构作为返回值的方法会使用 objc_msgSendSuper_stret 或 objc_msgSend_stret ;</li>
+<li>其它的消息都是使用 objc_msgSend 发送的。</li>
+</ul>
+<p>objc_msgSend查找selector的IMP，然后调用实际的方法，主要包括以下流程：</p>
+<ol>
+<li>查看cache是否有selector的IMP，如果有的话直接调用</li>
+<li>如果没cache，最终会调用lookUpImpOrForward，从类方法列表查找IMP并缓存到cache</li>
+<li>如果方法列表没有则会查找基类的方法，直到最上层基类(查找基类的时候也是先查找缓存，再查找方法列表)</li>
+<li>如果基类也没查找到，则返回_objc_msgForward的IMP，走消息转发流程。</li>
+</ol>
+<p>我们也可以自己通过class_getMethodImplementation拿到方法IMP(IMP是实际方法的函数指针)，然后调用：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">//[view addSubview:view2]</span><br><span class="line">void (*funtion_pointer)(id, SEL, UIView*) = (void(*)(id, SEL, UIView*)) class_getMethodImplementation((id)view, @selector(addSubview:));</span><br><span class="line">funtion_pointer(view, @selector(addSubview:), view2)</span><br></pre></td></tr></table></figure>
+<h1 id="汇编源码"><a href="#汇编源码" class="headerlink" title="汇编源码"></a>汇编源码</h1><p>objc_msgSend汇编源码在<a href="https://opensource.apple.com/source/objc4/objc4-723/runtime/Messengers.subproj/" target="_blank" rel="noopener">Messengers.subproj</a>目录，具体汇编如下：</p>
+<p><img src="https://upload-images.jianshu.io/upload_images/1368199-f40079879458fa38.jpg?imageMogr2/auto-orient/strip%7CimageView2/2/w/1240" alt="objc_msgSend汇编源码"></p>
+<p><img src="https://upload-images.jianshu.io/upload_images/1368199-1318490bd93e4a90.jpg?imageMogr2/auto-orient/strip%7CimageView2/2/w/1240" alt="_objc_msgSend_uncached汇编源码"></p>
+<p>objc_msgSend汇编代码不长，结合objc源码比较容易看懂。需要注意的是isa和TaggedPointer格式，isa指针不是纯粹的指针，还保存很多其它信息，具体可以参考isa_t union定义，其中只有3到35位才是class指针，所以查找之前会通过mask转换成class指针。</p>
+<p><img src="https://upload-images.jianshu.io/upload_images/1368199-6b3034fb353a1310.jpg?imageMogr2/auto-orient/strip%7CimageView2/2/w/1240" alt="isa格式"></p>
+<p>iOS系统为了提高性能和减小内存，使用了TaggedPointer来表示NSNumber、NSIndexPath等对象，对象并没有分配内存空间，而是把对象值保存在指针里面，只有指针无法容纳对象才会分配实际内存。TaggedPointer具体格式如下图，tag index表示具体Class，系统有维护一个全局映射表来保存tag index和Class的关系，具体可以查看<a href="https://opensource.apple.com/source/objc4/objc4-723/runtime/objc-internal.h.auto.html" target="_blank" rel="noopener">objc_tag_index_t</a>定义，查找到具体Class之后就跟正常oc对象一样查找IMP了。</p>
+<p><img src="https://upload-images.jianshu.io/upload_images/1368199-55ce227b4289cad7.jpg?imageMogr2/auto-orient/strip%7CimageView2/2/w/1240" alt="TaggedPointer指针格式"></p>
+<h1 id="Calling-Conventions"><a href="#Calling-Conventions" class="headerlink" title="Calling Conventions"></a>Calling Conventions</h1><p>arm64架构是通过q0-q7和x0-x7来传函数参数，可以看到objc_msgSend没对这几个寄存器做任何操作，找到IMP后直接通过br x17调用IMP，br告诉cpu不是子程序调用。<br>Objective-C所以方法发送都是通过objc_msgSend，每个方法返回值和参数都不一样，如果objc_msgSend像普通函数一样处理参数，为了处理不同参数类型和参数个数，可以使用varargs ，Objective-C调用的地方必须包裹成varargs，这样处理非常不灵活，objc_msgSend用了个很巧妙的技巧，就是对参数不做任何处理，查找到IMP后直接调用，因为在<strong>objc_msgSend开始执行时，栈帧（stack frame）的状态、数据，和各个寄存器的组合形式、数据，跟调用具体的函数指针（IMP）时所需的状态、数据，是完全一致的</strong>，所以我们用xcode调试的时候函数栈是看不到objc_msgSend，看上去就是消息发送过程完全没发生过，跟调用普通的c方法一摸一样。</p>
+<h1 id="黑科技"><a href="#黑科技" class="headerlink" title="黑科技"></a>黑科技</h1><p>objc_msgSend用很巧妙的技巧处理参数问题，利用这种技巧可以做很多方法，比如可以实现Aspects的效果，在调用实际方法前做些hook操作，hook完后再调实际方法。也可以使用libffi处理参数问题，可以搞很多事情。</p>
+<p>#引用</p>
+<p> <a href="http://www.arigrant.com/blog/2014/2/12/why-objcmsgsend-must-be-written-in-assembly" target="_blank" rel="noopener">Why objc_msgSend Must be Written in Assembly</a><br><a href="https://juejin.im/post/5a7e4d826fb9a0633d71d02d" target="_blank" rel="noopener">面向切面 Aspects 源码阅读</a><br><a href="http://www.cocoawithlove.com/2010/01/what-is-meta-class-in-objective-c.html" target="_blank" rel="noopener">What is a meta-class in Objective-C?</a><br><a href="https://blog.ibireme.com/2013/11/26/objective-c-messaging/" target="_blank" rel="noopener">Objective-C 中的消息与消息转发</a></p>
+
+          
+        
+      
+    </div>
+
+    
+
+    
+    
+    
+
+    
+
+    
+      
+    
+    
+
+    
+
+    <footer class="post-footer">
+      
+
+      
+
+      
+
+      
+      
+        <div class="post-eof"></div>
+      
+    </footer>
+  </div>
+  
+  
+  
+  </article>
+
+
+    
+      
+
+  
+
+  
+  
+  
+
+  
+
+  <article class="post post-type-normal" itemscope itemtype="http://schema.org/Article">
+  
+  
+  
+  <div class="post-block">
+    <link itemprop="mainEntityOfPage" href="http://yoursite.com/2019/05/13/深入理解Core-Text排版引擎/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="name" content="Alex Ting">
+      <meta itemprop="description" content="守护心中的那一亩田">
+      <meta itemprop="image" content="/images/avatar.gif">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Alex's Blog">
+    </span>
+
+    
+      <header class="post-header">
+
+        
+        
+          <h1 class="post-title" itemprop="name headline">
+                
+                
+                <a href="/2019/05/13/深入理解Core-Text排版引擎/" class="post-title-link" itemprop="url">深入理解Core Text排版引擎</a>
+              
+            
+          </h1>
+        
+
+        <div class="post-meta">
+          <span class="post-time">
+
+            
+            
+            
+
+            
+              <span class="post-meta-item-icon">
+                <i class="fa fa-calendar-o"></i>
+              </span>
+              
+                <span class="post-meta-item-text">Posted on</span>
+              
+
+              
+                
+              
+
+              <time title="Created: 2019-05-13 21:17:53 / Modified: 21:18:38" itemprop="dateCreated datePublished" datetime="2019-05-13T21:17:53+08:00">2019-05-13</time>
+            
+
+            
+              
+
+              
+            
+          </span>
+
+          
+            <span class="post-category">
+            
+              <span class="post-meta-divider">|</span>
+            
+              <span class="post-meta-item-icon">
+                <i class="fa fa-folder-o"></i>
+              </span>
+              
+                <span class="post-meta-item-text">In</span>
+              
+              
+                <span itemprop="about" itemscope itemtype="http://schema.org/Thing"><a href="/categories/iOS/" itemprop="url" rel="index"><span itemprop="name">iOS</span></a></span>
+
+                
+                
+              
+            </span>
+          
+
+          
+            
+            
+          
+
+          
+          
+
+          
+
+          
+
+          
+
+        </div>
+      </header>
+    
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+      
+
+      
+        
+          
+            <blockquote>
+<p>iOS系统上可以使用UILable、UITextFileld、TextKit显示文本，TextKit也可以做一些布局控制，但如果需要精细的布局控制，或者自线程异步绘制文本，就必须使用Core Text和Core Graphics，本文比较系统地讲解Core Text排版核心概念。</p>
+</blockquote>
+<h2 id="iOS文本系统框架"><a href="#iOS文本系统框架" class="headerlink" title="iOS文本系统框架"></a>iOS文本系统框架</h2><p><img src="https://upload-images.jianshu.io/upload_images/1368199-a4e7a1021001f631.png?imageMogr2/auto-orient/strip%7CimageView2/2/w/1240" alt="iOS文本系统框架"></p>
+<p>Core Text是iOS 系统文本排版核心框架，TextKit和WebKit都是封装在CoreText上的，TextKit是iOS7引入的，在iOS7之前几乎所有的文本都是 WebKit 来处理的，包括UILable、UITextFileld等，TextKit是从Cocoa文本系统移植到iOS系统的。<br>文本渲染过程中Core Text只负责排版，具体的绘制操作是通过Core Graphics框架完成的。如果需要精细的排版控制可以使用Core Text，否则可以直接使用Text Kit。</p>
+<h2 id="Core-Text排版引擎框架"><a href="#Core-Text排版引擎框架" class="headerlink" title="Core Text排版引擎框架"></a>Core Text排版引擎框架</h2><p><img src="https://upload-images.jianshu.io/upload_images/1368199-3a8ddc2329293d34.jpg?imageMogr2/auto-orient/strip%7CimageView2/2/w/1240" alt="CoreText排版引擎框架"></p>
+<p>CTFramesetter是Core Text中最上层的类，CTFramesetter持有attributed string并创建CTTypesetter，实际排版由CTTypesetter完成。CTFrame类似于书本中的「页」，CTLine类似「行」，CTRun是一行中具有相同属性的连续字形。CTFrame、CTLine、CTRun都有对应的Draw方法绘制文本，其中CTRun支持最精细的控制。</p>
+<p><img src="https://upload-images.jianshu.io/upload_images/1368199-a25e5f9adf650f28.jpg?imageMogr2/auto-orient/strip%7CimageView2/2/w/1240" alt="CoreText排版引擎框架"></p>
+<h2 id="排版核心概念"><a href="#排版核心概念" class="headerlink" title="排版核心概念"></a>排版核心概念</h2><p>要实现精细的排版控制，就必须理解排版的概念，因为Core Text很多api都涉及到排版概念，这些概念是平台无关的，其他系统也一样适应。<br>排版引擎通过下面两步对文本进行排版：</p>
+<ul>
+<li>生成字形(glyph generation)</li>
+<li>字形布局(glyph layout)</li>
+</ul>
+<h4 id="字符-Characters-和字形-Glyphs"><a href="#字符-Characters-和字形-Glyphs" class="headerlink" title="字符(Characters)和字形(Glyphs)"></a>字符(Characters)和字形(Glyphs)</h4><p>字符和字形概念比较好理解，下图很直观<br><img src="https://upload-images.jianshu.io/upload_images/1368199-77478e0dc902b807.png?imageMogr2/auto-orient/strip%7CimageView2/2/w/1240" alt="Glyphs of the character A"></p>
+<h4 id="字型-Typefaces-和字体-Fonts"><a href="#字型-Typefaces-和字体-Fonts" class="headerlink" title="字型(Typefaces)和字体(Fonts)"></a>字型(Typefaces)和字体(Fonts)</h4><p>字型和字体的概念可能没这么好区分，直接引用官方文档的原话</p>
+<blockquote>
+<p>A <em>typeface</em> is a set of visually related shapes for some or all of the characters in a written language. </p>
+</blockquote>
+<blockquote>
+<p>A <em>font</em> is a series of glyphs depicting the characters in a consistent size, typeface, and typestyle.</p>
+</blockquote>
+<p>字体是字型的子集，字型也叫font family，比如下图：</p>
+<p><img src="https://upload-images.jianshu.io/upload_images/1368199-f12e553c46c791d7.jpg?imageMogr2/auto-orient/strip%7CimageView2/2/w/1240" alt="Fonts in the Times font family"></p>
+<h4 id="字体属性-Font-metrics"><a href="#字体属性-Font-metrics" class="headerlink" title="字体属性(Font metrics)"></a>字体属性(Font metrics)</h4><p>排版引擎要布局字型，就必须知道字型大小和怎样布局，这些信息就叫字体属性，开发过程也是通过这些属性来计算布局的。字体属性由字体设计者提供，同一个字体不同字形的属性相同，主要属性如下图：</p>
+<p><img src="https://upload-images.jianshu.io/upload_images/1368199-42c1816d5c36dd93.jpg?imageMogr2/auto-orient/strip%7CimageView2/2/w/1240" alt="Glyph metrics"></p>
+<p><img src="https://upload-images.jianshu.io/upload_images/1368199-36fa8a053a65dda1.jpg?imageMogr2/auto-orient/strip%7CimageView2/2/w/1240" alt="Glyph metrics"></p>
+<ul>
+<li>baseline：字符基线，baseline是虚拟的线，baseline让尽可能多的字形在baseline上面，CTFrameGetLineOrigins获取的Origins就是每一行第一个CTRun的Origin</li>
+<li>ascent：字形最高点到baseline的推荐距离</li>
+<li>descent：字形最低点到baseline的推荐距离</li>
+<li>leading：行间距，即前一行的descent与下一行的ascent之间的距离</li>
+<li>advance width：Origin到下一个字形Origin的距离</li>
+<li>left-side bearing：Origin到字形最左边的距离</li>
+<li>right-side bearing：字形最右边到下一个字形Origin的距离</li>
+<li>bounding box：包含字形最小矩形</li>
+<li>x-height：一般指小写字母x最高的到baseline的推荐距离</li>
+<li>Cap-height：一般指H或I最高的到baseline的推荐距离</li>
+</ul>
+<p>部分字体属性可以通过UIFont的方法获取，ascent、descent、leading可以通过CTRunGetTypographicBounds、CTRunGetTypographicBounds方法获取，通过ascent、descent、leading可以计算line的实际高度。CTFrame、CTLine、CTRun都有提供api获取属性和绘制文本，控制粒度也由高到低，可以根据具体需求使用不同的粒度。<br>CTLine上不同CTRun默认是底部对齐的，如果一行文本有Attachment，并且Attachment比字体高，会导致字符偏下，如下图：</p>
+<p><img src="https://upload-images.jianshu.io/upload_images/1368199-59031ca27d4339ae.jpg?imageMogr2/auto-orient/strip%7CimageView2/2/w/1240" alt="带有Attachment的文本渲染"></p>
+<p>如果要使字符居中对齐，可以通过CGContextSetTextPosition调整每个CTRun的originY，调整后如下图：</p>
+<p><img src="https://upload-images.jianshu.io/upload_images/1368199-0008a5aed555f358.jpg?imageMogr2/auto-orient/strip%7CimageView2/2/w/1240" alt="垂直方向居中"></p>
+<h4 id="字距调整"><a href="#字距调整" class="headerlink" title="字距调整"></a>字距调整</h4><p>排版系统默认按advance width逐个字符渲染，这样会导致有些字符间距离很大，为了使排版后可读性更高，一般会调整字距，如下图：</p>
+<p><img src="https://upload-images.jianshu.io/upload_images/1368199-fb224b8e4c700f2d.jpg?imageMogr2/auto-orient/strip%7CimageView2/2/w/1240" alt="Kerning"></p>
+<h2 id="坐标系变换"><a href="#坐标系变换" class="headerlink" title="坐标系变换"></a>坐标系变换</h2><p>UIKit和Core Graphics使用不同的坐标系，UIKit坐标系原点在左上角，Core Graphics坐标系在左下角，如下图：</p>
+<p><img src="https://upload-images.jianshu.io/upload_images/1368199-b9f610d53eb49de3.jpg?imageMogr2/auto-orient/strip%7CimageView2/2/w/1240" alt="Core Graphics和UIKit坐标系"></p>
+<p>使用Core Graphics绘制前必须进行坐标变换，否则绘制后的文本是倒立的，<br>如下图：</p>
+<p><img src="https://upload-images.jianshu.io/upload_images/1368199-74a02fa304dfa411.jpg?imageMogr2/auto-orient/strip%7CimageView2/2/w/1240" alt="坐标未变换"></p>
+<p>坐标一般通过下面方法进行变换：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">//1.设置字形的变换矩阵为不做图形变换</span><br><span class="line">CGContextSetTextMatrix(context, CGAffineTransformIdentity);</span><br><span class="line">//2.平移方法，将画布向上平移bounds的高度</span><br><span class="line">CGContextTranslateCTM(context, 0.0f, self.bounds.size.height);</span><br><span class="line">//3.缩放方法，x轴缩放系数为1，则不变，y轴缩放系数为-1，则相当于以x轴为轴旋转180度</span><br><span class="line">CGContextScaleCTM(context, 1.0f, -1.0f);</span><br></pre></td></tr></table></figure>
+<p>变换之后就将Core Graphics坐标系变换成UIKit坐标系了。</p>
+<h2 id="Attachment"><a href="#Attachment" class="headerlink" title="Attachment"></a>Attachment</h2><p>Core Text 不能直接绘制图像，但可以留出空白空间来为图像腾出空间。通过设置 CTRun 的 delegate，可以确定 CTRun 的 ascent space, descent space and width，如下图：</p>
+<p><img src="https://upload-images.jianshu.io/upload_images/1368199-adf30405300a7872.jpg?imageMogr2/auto-orient/strip%7CimageView2/2/w/1240" alt="Attachment渲染"></p>
+<p>当Core Text遇到一个设置了CTRunDelegate的CTRun，它就会询问delegate：“我需要留多少空间给这块的数据”。通过在CTRunDelegate中设置这些属性，您可以在文本中给图片留开空位。具体方法可以参考「 <a href="https://www.raywenderlich.com/153591/core-text-tutorial-ios-making-magazine-app" title="Core Text Tutorial for iOS: Making a Magazine App" target="_blank" rel="noopener">Core Text Tutorial for iOS: Making a Magazine App</a> 」</p>
+<h2 id="点击响应"><a href="#点击响应" class="headerlink" title="点击响应"></a>点击响应</h2><p>使用文本渲染的时候经常需要不同的文本响应不同的点击事件，Core Text本身是不支持点击事件的，要实现不同的文本响应不同的点击事件，就必须知道点击的是哪个字符，核心过程：</p>
+<ul>
+<li>重写UIView Touch Event方法捕捉点击事件</li>
+<li>通过Core Text查找touch point对应的字符</li>
+</ul>
+<p>这里主要讲下如何通过Core Text查找touch point对应的字符，核心代码如下：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br></pre></td><td class="code"><pre><span class="line">- (CFIndex)characterIndexAtPoint:(CGPoint)p &#123;</span><br><span class="line">    CFIndex idx = NSNotFound;</span><br><span class="line">    if (!_lines) &#123;</span><br><span class="line">        return idx;</span><br><span class="line">    &#125;</span><br><span class="line">    CGPoint *linesOrigins = (CGPoint*)malloc(sizeof(CGPoint) * CFArrayGetCount(_lines));</span><br><span class="line">    if (!linesOrigins) &#123;</span><br><span class="line">        return idx;</span><br><span class="line">    &#125;</span><br><span class="line">    </span><br><span class="line">    p = CGPointMake(p.x - _rect.origin.x, p.y - _rect.origin.y);</span><br><span class="line">    // Convert tap coordinates (start at top left) to CT coordinates (start at bottom left)</span><br><span class="line">    p = CGPointMake(p.x, _rect.size.height - p.y);</span><br><span class="line">    </span><br><span class="line">    CTFrameGetLineOrigins(_frame, CFRangeMake(0, 0), linesOrigins);</span><br><span class="line">    </span><br><span class="line">    for (CFIndex lineIndex = 0; lineIndex &lt; _fitNumberOfLines; lineIndex++) &#123;</span><br><span class="line">        CGPoint lineOrigin = linesOrigins[lineIndex];</span><br><span class="line">        CTLineRef line = CFArrayGetValueAtIndex(_lines, lineIndex);</span><br><span class="line">        </span><br><span class="line">        // Get bounding information of line</span><br><span class="line">        CGFloat ascent = 0.0f, descent = 0.0f, leading = 0.0f;</span><br><span class="line">        CGFloat width = (CGFloat)CTLineGetTypographicBounds(line, &amp;ascent, &amp;descent, &amp;leading);</span><br><span class="line">        CGFloat yMin = (CGFloat)floor(lineOrigin.y - descent);</span><br><span class="line">        CGFloat yMax = (CGFloat)ceil(lineOrigin.y + ascent);</span><br><span class="line">        </span><br><span class="line">        // Apply penOffset using flushFactor for horizontal alignment to set lineOrigin since this is the horizontal offset from drawFramesetter</span><br><span class="line">        CGFloat flushFactor = 0.0;;</span><br><span class="line">        CGFloat penOffset = (CGFloat)CTLineGetPenOffsetForFlush(line, flushFactor, _rect.size.width);</span><br><span class="line">        lineOrigin.x = penOffset;</span><br><span class="line">        lineOrigin.y = lineOrigin.y - _originY;</span><br><span class="line">        </span><br><span class="line">        // Check if we&apos;ve already passed the line</span><br><span class="line">        if (p.y &gt; yMax) &#123;</span><br><span class="line">            break;</span><br><span class="line">        &#125;</span><br><span class="line">        // Check if the point is within this line vertically</span><br><span class="line">        if (p.y &gt;= yMin) &#123;</span><br><span class="line">            // Check if the point is within this line horizontally</span><br><span class="line">            if (p.x &gt;= lineOrigin.x &amp;&amp; p.x &lt;= lineOrigin.x + width) &#123;</span><br><span class="line">                // Convert CT coordinates to line-relative coordinates</span><br><span class="line">                CGPoint relativePoint = CGPointMake(p.x - lineOrigin.x, p.y - lineOrigin.y);</span><br><span class="line">                idx = CTLineGetStringIndexForPosition(line, relativePoint);</span><br><span class="line">                break;</span><br><span class="line">            &#125;</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line">    free(linesOrigins);</span><br><span class="line">    return idx;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<h2 id="引用"><a href="#引用" class="headerlink" title="引用"></a>引用</h2><p><a href="https://developer.apple.com/library/archive/documentation/GraphicsImaging/Conceptual/drawingwithquartz2d/Introduction/Introduction.html#//apple_ref/doc/uid/TP40007533-SW1" target="_blank" rel="noopener">Quartz 2D Programming Guide</a><br><a href="https://developer.apple.com/library/archive/documentation/StringsTextFonts/Conceptual/CoreText_Programming/Introduction/Introduction.html#//apple_ref/doc/uid/TP40005533-CH1-SW1" target="_blank" rel="noopener">Core Text Programming Guide</a><br><a href="https://developer.apple.com/library/archive/documentation/StringsTextFonts/Conceptual/TextAndWebiPhoneOS/Introduction/Introduction.html#//apple_ref/doc/uid/TP40009542-CH1-SW1" target="_blank" rel="noopener">Text Programming Guide for iOS</a><br><a href="https://developer.apple.com/library/archive/documentation/TextFonts/Conceptual/CocoaTextArchitecture/Introduction/Introduction.html#//apple_ref/doc/uid/TP40009459" target="_blank" rel="noopener">Cocoa Text Architecture Guide</a><br> <a href="https://www.raywenderlich.com/153591/core-text-tutorial-ios-making-magazine-app" title="Core Text Tutorial for iOS: Making a Magazine App" target="_blank" rel="noopener">Core Text Tutorial for iOS: Making a Magazine App</a><br><a href="https://www.objccn.io/issue-5-1/" target="_blank" rel="noopener">初识 TextKit</a><br><a href="https://en.wikipedia.org/wiki/Font" target="_blank" rel="noopener">Font wiki</a></p>
+
+          
+        
+      
+    </div>
+
+    
+
+    
+    
+    
+
+    
+
+    
+      
+    
+    
+
+    
+
+    <footer class="post-footer">
+      
+
+      
+
+      
+
+      
+      
+        <div class="post-eof"></div>
+      
+    </footer>
+  </div>
+  
+  
+  
+  </article>
+
+
+    
+      
+
+  
+
+  
+  
+  
+
+  
+
+  <article class="post post-type-normal" itemscope itemtype="http://schema.org/Article">
+  
+  
+  
+  <div class="post-block">
+    <link itemprop="mainEntityOfPage" href="http://yoursite.com/2019/05/13/iOS-App自动监控Zombie对象方案/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="name" content="Alex Ting">
+      <meta itemprop="description" content="守护心中的那一亩田">
+      <meta itemprop="image" content="/images/avatar.gif">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Alex's Blog">
+    </span>
+
+    
+      <header class="post-header">
+
+        
+        
+          <h1 class="post-title" itemprop="name headline">
+                
+                
+                <a href="/2019/05/13/iOS-App自动监控Zombie对象方案/" class="post-title-link" itemprop="url">iOS App自动监控Zombie对象方案</a>
+              
+            
+          </h1>
+        
+
+        <div class="post-meta">
+          <span class="post-time">
+
+            
+            
+            
+
+            
+              <span class="post-meta-item-icon">
+                <i class="fa fa-calendar-o"></i>
+              </span>
+              
+                <span class="post-meta-item-text">Posted on</span>
+              
+
+              
+                
+              
+
+              <time title="Created: 2019-05-13 21:15:27 / Modified: 21:17:30" itemprop="dateCreated datePublished" datetime="2019-05-13T21:15:27+08:00">2019-05-13</time>
+            
+
+            
+              
+
+              
+            
+          </span>
+
+          
+            <span class="post-category">
+            
+              <span class="post-meta-divider">|</span>
+            
+              <span class="post-meta-item-icon">
+                <i class="fa fa-folder-o"></i>
+              </span>
+              
+                <span class="post-meta-item-text">In</span>
+              
+              
+                <span itemprop="about" itemscope itemtype="http://schema.org/Thing"><a href="/categories/iOS/" itemprop="url" rel="index"><span itemprop="name">iOS</span></a></span>
+
+                
+                
+              
+            </span>
+          
+
+          
+            
+            
+          
+
+          
+          
+
+          
+
+          
+
+          
+
+        </div>
+      </header>
+    
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+      
+
+      
+        
+          
+            <blockquote>
+<p>iOS开发过程或者线上版本经常有Crash崩溃在objc_msgSend、objc_retain、objc_release等方法，这些都是典型等Zombie问题，在开发过程可以使用Instruments工具定位，但对于线上问题或者很难复的问题Instruments就很难定位了，如果能主动捕捉Zombie对象，并且Trace Zombie对象信息和释放栈，那就很容易分析问题了。本文介绍一种主动监控Zombie对象方案，方案已经上线验证一段时间了，并且已经在github上开源了。</p>
+</blockquote>
+<h2 id="为什么使用ARC还会有Zombie问题？"><a href="#为什么使用ARC还会有Zombie问题？" class="headerlink" title="为什么使用ARC还会有Zombie问题？"></a>为什么使用ARC还会有Zombie问题？</h2><p>可能很多同学觉得使用ARC和weak属性后就不会有Zombie问题了，但App上线后还是会发现很多Zombie问题，主要是因为：</p>
+<ul>
+<li>还有很多地方使用assign<br>由于历史原因，系统库还有地方使用assign，最典型的就是<strong>iOS8下UITableView delegate和dataSource</strong>，相信大部分iOS开发都遇到过这个问题导致的Crash，还有就是自己都代码也可能使用assign。</li>
+<li>线程安全问题<br>虽然ARC下可以不用考虑对象释放问题，但如果不是线程安全的话，就算使用weak还是可能导致Zombie问题。</li>
+</ul>
+<h2 id="如何分析Zombie问题？"><a href="#如何分析Zombie问题？" class="headerlink" title="如何分析Zombie问题？"></a>如何分析Zombie问题？</h2><p>大多数Zombie问题都是Crash在objc_msgSend方法，一般都是消息转发的时候发生EXC_BAD_ACCESS错误，但从堆栈上无法看出是什么对象、什么方法出了问题，并且很多时候也不是Crash在我们自己但代码附近，这种情况就更难分析了。<br>我们知道调用<strong>objc_msgSend方法的时候前面几个参数是通过x0~x7寄存器传递的，其中x0是self指针，x1是SEL</strong>，如果能知道Crash在哪个SEL，结合代码有可能进一步分析出哪里Crash了。SEL是指向C string的指针，并且C string 保存在__TEXT段，所以结合dSYM和x1寄存器，正常情况下是可以解析出SEL的，具体解析方法可以参考<a href="http://sealiesoftware.com/blog/archive/2008/09/22/objc_explain_So_you_crashed_in_objc_msgSend.html" target="_blank" rel="noopener">「So you crashed in objc_msgSend()」</a>。<br>如果SEL是很常见的方法，即使知道SEL还是很分析出问题，这个时候如果能知道Zombie对象类名，对象释放栈的话就能很容易分析出问题了，但仅通过Crash log文件是无法获取这些信息的，这也是大多数Zombie问题很难定位的原因。<br>其实除了Crash，Zombie也可能只是导致逻辑错误，这个时候就更难定位问题了，因为往往问题现场离对象释放的地方很远。</p>
+<h2 id="自动监控Zombie对象方案"><a href="#自动监控Zombie对象方案" class="headerlink" title="自动监控Zombie对象方案"></a>自动监控Zombie对象方案</h2><p>如果能主动监测Zombie，在第一次使用Zombie对象的时候就发现问题，可以进行上报，也可以主动触发Crash，同时在释放对象的时候保存对象信息，可以知道到底是哪个对象出现了问题，这样可以极大的提高Zombie问题的发现率和解决率。<br>要在线上版本实时监控，监控组件必须对App性能影响很小，在设计对时候从下面点考虑：</p>
+<ul>
+<li>Trace Zombie对象类名、selector、释放栈信息</li>
+<li>内存可控</li>
+<li>监控策略可控</li>
+<li>对cpu影响要很小</li>
+</ul>
+<h4 id="如何监控"><a href="#如何监控" class="headerlink" title="如何监控"></a>如何监控</h4><p>要监控Zombie对象，就必须监控访问已经释放对对象，所以可以从下面几个点思考：</p>
+<ol>
+<li>如何监控对象释放<br>Objective-C上可以方便的使用Method swizzling hook dealloc方法监控对象的释放，Method swizzling只能监控Objective-C对象的释放；也可以在更底层hook free，使用Fishhook可以很方便的hook free方法，hook free可以监控所以对象的释放。</li>
+<li>如何监控访问已经释放的对象<br>可以使用Objective-C Runtime消息转发机制监控Objective-C对象访问，要监控C/C++对象访问复杂些，一种方法是对象释放后使用vm_protect设置虚拟内存为不可读写，不过vm_protect只能以内存页为单位进行设置。</li>
+</ol>
+<p>####最终方案</p>
+<p>因为iOS App上大部分自定义对象都是Objective-C对象，所以最终使用Method swizzling hook dealloc方法监控对象的释放，并且使用Runtime消息转发机制监控Objective-C对象访问，主要过程如下：</p>
+<ol>
+<li>hook dealloc方法，dealloc时只析构对象，不释放内存，更换isa指针指向ZombieHandler Class</li>
+<li>延迟释放对象</li>
+<li>ZombieHandler Class拦截消息，从而监控使Zombie对象<br>方案模块结构如下图：<br><img src="https://upload-images.jianshu.io/upload_images/1368199-74885312d94feb52.jpg?imageMogr2/auto-orient/strip%7CimageView2/2/w/1240" alt="Zombie监控模块结构图"></li>
+</ol>
+<h4 id="内存优化"><a href="#内存优化" class="headerlink" title="内存优化"></a>内存优化</h4><p>一开始对象释放栈保存完整的栈，并且保存string类型，类似下面</p>
+<blockquote>
+<p>“1   libdispatch.dylib    0x0000000021809823 0x21807000 + 10275”<br>        “2   libdispatch.dylib    0x0000000021809823 0x21807000 + 10275”</p>
+</blockquote>
+<p>后来改成只保存函数地址，并且arm64下每个地址只用40bit，iOS64位系统下每个地址其实只用了36位，使用40位方便操作，上报的时候也只上报函数地址，这样可以极大程度的减小组件占用的内存，优化后栈类型下面：</p>
+<blockquote>
+<p>dealloc stack:{<br>tid:1027<br>stack:[0x0000000100047534,0x000000010004b2e4,0x00000001000498b0,0x000000018e9bdf9c,0x000000018e9bdb78,0x000000018e9c43f8,0x000000018e9c1894,0x000000018ea332fc,]<br>}</p>
+</blockquote>
+<p>其实栈可以直接保存在延迟释放对象的内存上面，这样可以进一步优化内存使用。</p>
+<h4 id="开源"><a href="#开源" class="headerlink" title="开源"></a>开源</h4><p>监控组件已经开源，并且提供符号化脚本，使用也很简单，只需要几行调用就可以：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line">//setup DDZombieMonitor</span><br><span class="line">void (^zombieHandle)(NSString *className, void *obj, NSString *selectorName, NSString *deallocStack, NSString *zombieStack) = ^(NSString *className, void *obj, NSString *selectorName, NSString *deallocStack, NSString *zombieStack) &#123;</span><br><span class="line">    NSString *zombeiInfo = [NSString stringWithFormat:@&quot;ZombieInfo = \&quot;detect zombie class:%@ obj:%p sel:%@\ndealloc stack:%@\nzombie stack:%@\&quot;&quot;, className, obj, selectorName, deallocStack, zombieStack];</span><br><span class="line">    NSLog(@&quot;%@&quot;, zombeiInfo);</span><br><span class="line">    </span><br><span class="line">    NSString *binaryImages = [NSString stringWithFormat:@&quot;BinaryImages = \&quot;%@\&quot;&quot;, [self binaryImages]];</span><br><span class="line">    NSLog(@&quot;%@&quot;, binaryImages);</span><br><span class="line">&#125;;</span><br><span class="line">[DDZombieMonitor sharedInstance].handle = zombieHandle;</span><br><span class="line">[[DDZombieMonitor sharedInstance] startMonitor];</span><br></pre></td></tr></table></figure>
+<p><strong>组件支持下面特性</strong></p>
+<ul>
+<li>主动监控Zombie问题，并且提供Zombie对象类名、selector、释放栈信息</li>
+<li>支持不同监控策略，包括App内自定义类、白名单、黑名单、所有对象</li>
+<li>支持设置最大占用内存</li>
+<li>组件在收到内存告警或超过最大内存时，通过FIFO算法释放部分对象</li>
+</ul>
+<h4 id="性能影响和稳定性"><a href="#性能影响和稳定性" class="headerlink" title="性能影响和稳定性"></a>性能影响和稳定性</h4><p>组件上线一两个版本了，目前还没发现Crash<br>cpu影响：打开Zombie检测前后相差0.2%左右，影响很小<br>内存影响：Zombie组件内存开关为10M的时候，实际内存增加11M左右，10M只计算了延迟释放对象和对象释放栈，组件本身占用内存没计算在内，符合预期</p>
+<p>具体源码请移步<strong><a href="https://github.com/AlexTing0/DDZombieMonitor" target="_blank" rel="noopener">「github DDZombieMonitor」</a></strong></p>
+<h2 id="参考"><a href="#参考" class="headerlink" title="参考"></a>参考</h2><p><em><a href="http://sealiesoftware.com/blog/archive/2008/09/22/objc_explain_So_you_crashed_in_objc_msgSend.html" target="_blank" rel="noopener">So you crashed in objc_msgSend()</a></em><br><em><a href="https://www.jianshu.com/p/df4b41ecc683" target="_blank" rel="noopener">手动分析iOS Crash log庖丁解牛</a></em></p>
+
+          
+        
+      
+    </div>
+
+    
+
+    
+    
+    
+
+    
+
+    
+      
+    
+    
+
+    
+
+    <footer class="post-footer">
+      
+
+      
+
+      
+
+      
+      
+        <div class="post-eof"></div>
+      
+    </footer>
+  </div>
+  
+  
+  
+  </article>
+
+
+    
+      
+
+  
+
+  
+  
+  
+
+  
+
+  <article class="post post-type-normal" itemscope itemtype="http://schema.org/Article">
+  
+  
+  
+  <div class="post-block">
+    <link itemprop="mainEntityOfPage" href="http://yoursite.com/2019/05/13/UITableView常见Crash案例分析/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="name" content="Alex Ting">
+      <meta itemprop="description" content="守护心中的那一亩田">
+      <meta itemprop="image" content="/images/avatar.gif">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Alex's Blog">
+    </span>
+
+    
+      <header class="post-header">
+
+        
+        
+          <h1 class="post-title" itemprop="name headline">
+                
+                
+                <a href="/2019/05/13/UITableView常见Crash案例分析/" class="post-title-link" itemprop="url">UITableView常见Crash案例分析</a>
+              
+            
+          </h1>
+        
+
+        <div class="post-meta">
+          <span class="post-time">
+
+            
+            
+            
+
+            
+              <span class="post-meta-item-icon">
+                <i class="fa fa-calendar-o"></i>
+              </span>
+              
+                <span class="post-meta-item-text">Posted on</span>
+              
+
+              
+                
+              
+
+              <time title="Created: 2019-05-13 21:14:20 / Modified: 21:21:27" itemprop="dateCreated datePublished" datetime="2019-05-13T21:14:20+08:00">2019-05-13</time>
+            
+
+            
+              
+
+              
+            
+          </span>
+
+          
+            <span class="post-category">
+            
+              <span class="post-meta-divider">|</span>
+            
+              <span class="post-meta-item-icon">
+                <i class="fa fa-folder-o"></i>
+              </span>
+              
+                <span class="post-meta-item-text">In</span>
+              
+              
+                <span itemprop="about" itemscope itemtype="http://schema.org/Thing"><a href="/categories/iOS/" itemprop="url" rel="index"><span itemprop="name">iOS</span></a></span>
+
+                
+                
+              
+            </span>
+          
+
+          
+            
+            
+          
+
+          
+          
+
+          
+
+          
+
+          
+
+        </div>
+      </header>
+    
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+      
+
+      
+        
+          
+            <h2 id="写在最前面"><a href="#写在最前面" class="headerlink" title="写在最前面"></a>写在最前面</h2><p>UITableView是iOS开发最常用的类，用起来很方便，但使用不当也很容易引起Crash，UICollectionView和UITableView很类似，本文重点讲UITableView。UITableView很大一部分Crash是由于dataSource同步问题导致的，但在不同的场景会有不同的Crash栈，<strong>本文会结合线上真实的案例讲解UITableView常见的Crash和分析过程</strong>。<br><em>UITableView常见Crash主要有下面几类:</em></p>
+<ul>
+<li>dataSource更新后没同步刷新UITableView</li>
+<li>UITableView dataSource is not set</li>
+<li>Invalid update</li>
+<li>failed to obtain a cell from its dataSource</li>
+</ul>
+<h2 id="dataSource更新后没同步刷新UITableView"><a href="#dataSource更新后没同步刷新UITableView" class="headerlink" title="dataSource更新后没同步刷新UITableView"></a>dataSource更新后没同步刷新UITableView</h2><p>这是最常见也是最低级的错误，我们APP在刚上线的时候有几粒这样的错误，后面大家注意后就很少见这类错误了。<br>这类错误主要是由于dataSource个数比tableview cell个数少，导致访问dataSource时数组越界，Crash栈上有NSRangeException异常，要避免这类错误主要注意下面几个点：</p>
+<ul>
+<li>更新完dataSource后在主线程立即调reloadData或其他api更新tableview</li>
+<li>子线程操作dataSource时需要线程安全，这其实是任何多线程都要注意的问题～</li>
+<li>block dispatch到主线程执行并不等于一定没问题，由于dispatch到主线程block是一个一个执行的，并不能确保两个block连续执行，中间可能还会执行其他block，写代码时一定要注意这点。</li>
+</ul>
+<h2 id="UITableView-dataSource-is-not-set"><a href="#UITableView-dataSource-is-not-set" class="headerlink" title="UITableView dataSource is not set"></a>UITableView dataSource is not set</h2><p>这个是很少见但Crash率又很高的一个案例，分析这个Crash前前后后也化了很多时间。<br>Crash栈如下：</p>
+<p><img src="http://upload-images.jianshu.io/upload_images/1368199-dad34d3adbcc94d9.png?imageMogr2/auto-orient/strip%7CimageView2/2/w/1240" alt="image.png"></p>
+<p>###第一次分析</p>
+<p>这个Crash是在中间某个版本突然冒出来的，并且Crash量很多，Crash栈没有任何我们自己的代码，没法直接定位到问题源，所以首先要找出问题源在哪，在分析几个栈后发现Crash都在直播间附近，所以锁定问题出在直播间的聊天室。<br>之前没见过类似的Crash，Exception Codes是UITableView dataSource is not set，但肯定可以排除初始化tableview时没有设置dataSource，因为这样tableview并不会显示，所以怀疑是tableView:cellForRowAtIndexPath:返回了nil，分析代码逻辑发现tableView:cellForRowAtIndexPath:的确会返回nil，所以很开心的以为解决了这个问题。<br>然而新版上线后发现并没有解决～～</p>
+<p>###再次分析</p>
+<p>新版上线后还是有很多这个Crash，所以又硬着头皮分析了一下Crash log，仔细分析了Crash log后，发现Crash上都有[UITableView _updateAnimationDidStop:finished:context:]，根据名字可以知道这个方法是在UITableView某些动画结束时调用的，我们的代码是通过insertRowsAtIndexPaths:withRowAnimation:更新tableview的，所以怀疑是这个方法触发的动画，通过断点分析后的确时这个方法触发的。<br>—————————-我是华丽的分割线—————————-<br>一开始的思路是能不能禁止这个方法调用，其实我们的代码在调用这个方法之前已经通过setAnimationsEnabled:来禁止动画了，在尝试了其他方案后都无法禁止这个方法调用。<br>—————————-我是华丽的分割线—————————-<br>没法禁止这个方法调用后，就分析什么为什么dataSource会是nil，分析了整个代码逻辑发现只有vc dealloc的时候才可能导致dataSource是nil，我们也没有在dealloc里显式设置dataSource，而是weak属性自动设的。正常的vc也都是这样写的，唯一需要在dealloc里设置tableview的delegate和dataSource也是兼容iOS9以下系统delegate是assign的问题。<br>—————————-我是华丽的分割线—————————-<br>现在大概可以确定是在调insertRowsAtIndexPaths:withRowAnimation:后操作还没结束vc被pop出去了，导致dataSource变为了nil。一开始的想法是能不能在dealloc的时候取消掉tableview所有动画，发现系统也没提供接口。</p>
+<p>###最终解决方案</p>
+<p>分析过程很冗长，但其实解决方法非常简单，简单到你都无法想象，只需要两行代码就可以解决～～<br><em>在dealloc里把dataSource设成nil，并且调用reloadData。</em></p>
+<p>###思考</p>
+<p><strong>为什么我们平时用tableview的时候都没有在dealloc里把dataSource设成nil和reloadData也不会有问题？</strong><br>原因是因为正常的场景在pop的时候tableview都没有动画，而我们的直播间里聊天室tableview不停的有新的cell插进来，所以在pop的时候有动画的概率很高。</p>
+<p><strong>这个crash主要原因是tableview更新的时候section和row不为0，所以调用cellForRowAtIndexPath创建cell，但创建的时候发现dataSource为nil，在numberOfRowsInSection方法里面返回非0,同时把dataSource设为nil可以复现这个crash</strong></p>
+<p>###关于reloadData的一些分析</p>
+<p>通过断点分析reloadData方法发现下面几点：</p>
+<ul>
+<li>调用reloadData后会立即触发numberOfSectionsInTableView和numberOfRowsInSection调用，里面会更新tableview的section和row信息，但并一定会立即调cellForRowAtIndexPath</li>
+<li>cellForRowAtIndexPath方法和numberOfRowsInSection并不是严格顺序执行的，这两个方法虽然都是在主线程runloop里执行，但两个方法中间可能执行很多其他操作</li>
+<li>就算section和row都为0，还是会调用[UITableView _updateVisibleCellsNow:isRecursive:]更新tableview，但不会调cellForRowAtIndexPath，这就是为什么调reloadData不会有这个crash了。</li>
+</ul>
+<p>##Invalid update</p>
+<p>这类crash一般时调用insertRowsAtIndexPaths:withRowAnimation:系列方法更新tableview时dataSource和tableview更新不匹配导致的。<br>crash栈：</p>
+<p><img src="http://upload-images.jianshu.io/upload_images/1368199-7c8ca3d2ceb26ed5.png?imageMogr2/auto-orient/strip%7CimageView2/2/w/1240" alt="image.png"></p>
+<p>crash栈的Exception Codes信息已经说的很清楚了，是因为tableview更新后cell个数跟numberOfRowsInSection返回的不一致，这类问题也出现了很多次，大多是我们使用不当导致的。<br>主要需要主要下面几点：</p>
+<ul>
+<li>在同一个 beginUpdates and endUpdates中，不管insertion and deletion的顺序如何，都会先执行deletion。</li>
+<li>indexPaths里的index不能重复，上面这个crash就是因为insertRowsAtIndexPaths的时候逻辑错误导致indexPaths里的index重复了。</li>
+</ul>
+<p>##failed to obtain a cell from its dataSource</p>
+<p>这类问题比较少见，如果cellForRowAtIndexPath方法返回nil就会导致这种crash，crash栈如下：</p>
+<p><img src="http://upload-images.jianshu.io/upload_images/1368199-fc8883ba56de1adb.png?imageMogr2/auto-orient/strip%7CimageView2/2/w/1240" alt="image.png"></p>
+<p>##写在最后面</p>
+<p>用系统组件的时候很多问题都是我们不了解组件的底层实现或者没按照api文档使用导致的，所以在使用一个组件的时候还是要多思考组件的底层机制。</p>
+
+          
+        
+      
+    </div>
+
+    
+
+    
+    
+    
+
+    
+
+    
+      
+    
+    
+
+    
+
+    <footer class="post-footer">
+      
+
+      
+
+      
+
+      
+      
+        <div class="post-eof"></div>
+      
+    </footer>
+  </div>
+  
+  
+  
+  </article>
+
+
+    
+      
+
+  
+
+  
+  
+  
+
+  
+
+  <article class="post post-type-normal" itemscope itemtype="http://schema.org/Article">
+  
+  
+  
+  <div class="post-block">
+    <link itemprop="mainEntityOfPage" href="http://yoursite.com/2019/05/13/iOS-Crash-log符号化庖丁解牛/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="name" content="Alex Ting">
+      <meta itemprop="description" content="守护心中的那一亩田">
+      <meta itemprop="image" content="/images/avatar.gif">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Alex's Blog">
+    </span>
+
+    
+      <header class="post-header">
+
+        
+        
+          <h1 class="post-title" itemprop="name headline">
+                
+                
+                <a href="/2019/05/13/iOS-Crash-log符号化庖丁解牛/" class="post-title-link" itemprop="url">iOS Crash log符号化庖丁解牛</a>
+              
+            
+          </h1>
+        
+
+        <div class="post-meta">
+          <span class="post-time">
+
+            
+            
+            
+
+            
+              <span class="post-meta-item-icon">
+                <i class="fa fa-calendar-o"></i>
+              </span>
+              
+                <span class="post-meta-item-text">Posted on</span>
+              
+
+              
+                
+              
+
+              <time title="Created: 2019-05-13 21:13:01 / Modified: 21:13:57" itemprop="dateCreated datePublished" datetime="2019-05-13T21:13:01+08:00">2019-05-13</time>
+            
+
+            
+              
+
+              
+            
+          </span>
+
+          
+            <span class="post-category">
+            
+              <span class="post-meta-divider">|</span>
+            
+              <span class="post-meta-item-icon">
+                <i class="fa fa-folder-o"></i>
+              </span>
+              
+                <span class="post-meta-item-text">In</span>
+              
+              
+                <span itemprop="about" itemscope itemtype="http://schema.org/Thing"><a href="/categories/iOS/" itemprop="url" rel="index"><span itemprop="name">iOS</span></a></span>
+
+                
+                
+              
+            </span>
+          
+
+          
+            
+            
+          
+
+          
+          
+
+          
+
+          
+
+          
+
+        </div>
+      </header>
+    
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+      
+
+      
+        
+          
+            <p>项目在做zombie内存监测的时候有把zombie调用栈和oc对象释放栈报上来，由于我们的crash组件是用的第三方组件，zombie栈没法和crash log一起符号化，要自己对栈进行符号化，研究了一下CrashLog的还原原理和方法。</p>
+<p>###Crash Log符号还原方法</p>
+<p>####使用xcode</p>
+<p>这是最简单的方法，要使用xcode进行符号还原需要下面三个文件：<br><figure class="highlight xml"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">Crash Reports（.crash文件）</span><br><span class="line">符号文件 (.dsymb文件)</span><br><span class="line">应用程序文件 (appName.app文件）</span><br></pre></td></tr></table></figure></p>
+<p>把这3个文件放到同一个目录下，打开Xcode的Window菜单下的organizer，然后点击Devices tab，然后选中左边的Device Logs。然后把.crash文件拖到Device Logs或者选择下面的import导入.crash文件。</p>
+<p>####使用symbolicatecrash</p>
+<p>symbolicatecrash是xcode自带的工具<br>将“.app“, “.dSYM”和 “.crash”文件放到同一个目录下，终端设置如下环境：<br><figure class="highlight shell"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">export DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer</span><br></pre></td></tr></table></figure></p>
+<p>然后输入下面命令</p>
+<figure class="highlight shell"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">/Applications/Xcode.app/Contents/Developer/Platforms/iPhoneOS.platform/Developer/Library/PrivateFrameworks/DTDeviceKitBase.framework/Versions/A/Resources/symbolicatecrash appName.crash appName.app &gt; appName.log</span><br></pre></td></tr></table></figure>
+<p>####使用atos命令行</p>
+<p>前面两种方法足够简单，但都不适合脚本自动化，并且我们也没有原始.crash文件，<br>本文重点介绍这种方法和内部的原理。<br>atos命令可以对指定的地址进行符号化</p>
+<blockquote>
+<p><em>NAME</em><br>     atos – convert numeric addresses to symbols of binary images or processes<br><em>SYNOPSIS</em><br>     atos [-o <binary-image-file>] [-p <pid> | <partial-executable-name>] [-arch architecture][-l <load-address>] [-s <slide>] [-printHeader] [-v] [-D] [-f <address-input-file>] [<address> …]<br><em>DESCRIPTION</em><br>     The atos command converts numeric addresses to their symbolic equivalents.  If full debug symbol infor-mation informationmation is available, for example in a .app.dSYM sitting beside a .app, then the output of atos will<br>include file name and source line number information.</address></address-input-file></slide></load-address></partial-executable-name></pid></binary-image-file></p>
+</blockquote>
+<p>###符号还原原理</p>
+<p>首先来看下需要还原的栈长啥样</p>
+<figure class="highlight html"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">0   AppName                     0x00000001009e3110 _ZNSt3__111char_traitsIcE2eqEcc + 7884972</span><br><span class="line">1   AppName                     0x0000000100620f04 _ZNSt3__111char_traitsIcE2eqEcc + 3944096</span><br><span class="line">2   CoreFoundation              0x0000000188e58f60 <span class="tag">&lt;<span class="name">redacted</span>&gt;</span> + 132</span><br><span class="line">3   CoreFoundation              0x0000000188d5280c _CF_forwarding_prep_0 + 92</span><br></pre></td></tr></table></figure>
+<p>看栈可以知道每个frame包括image名、代码地址、代码地址对应的符号信息，现在代码地址对应的符号是一串奇怪东东，我们要做的就是把这串奇怪的东东还原成可读的信息，包括函数名、原文件名、代码行。<br>要还原符号信息必须解决下面问题</p>
+<ul>
+<li>从哪里找函数名、原文件名、代码行这些信息</li>
+<li>怎么找这些信息</li>
+</ul>
+<p>###从哪里找函数名、原文件名、代码行这些信息</p>
+<p>####dSYM和DWARF</p>
+<p>dSYM(debugging SYMbol)是从Mach-O文件中抽取调试信息而得到的文件目录，发布的时候为了安全和减小安全，一般会把调试信息存储在单独的文件，dSYM实际是一个文件目录，其目录结构如下：</p>
+<figure class="highlight html"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">|--AppName.app.dSYM</span><br><span class="line">   |--Contents</span><br><span class="line">     |--info.plist</span><br><span class="line">     |--Resources</span><br><span class="line">       |--DWARF</span><br><span class="line">         |--AppName</span><br></pre></td></tr></table></figure>
+<p>dSYM符号信息实际存储在DWARF文件里面，DWARF （DebuggingWith Arbitrary Record Formats）是起源贝尔实验室的一种调试信息文件格式，是ELF和Mach-O等文件格式中用来存储和处理调试信息的标准格式。<br>DWARF文件包含所有调试信息，并且以section的形式进行存储，DWARF使用DIE(Debugging Information Entry)来存储具体信息，DIE通过树结构组织，DIE可以有兄弟节点和子节点。DWARF文件包括下面section：<br><figure class="highlight html"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><span class="line">.debug_abbrev              Abbreviations used in the .debug_info section</span><br><span class="line">.debug_aranges             A mapping between memory address and compilation</span><br><span class="line">.debug_frame               Call Frame Information</span><br><span class="line">.debug_info                The core DWARF data containing DIEs</span><br><span class="line">.debug_line                Line Number Program</span><br><span class="line">.debug_loc                 Macro descriptions</span><br><span class="line">.debug_macinfo             A lookup table for global objects and functions</span><br><span class="line">.debug_pubnames            A lookup table for global objects and functions</span><br><span class="line">.debug_pubtypes            A lookup table for global types</span><br><span class="line">.debug_ranges              Address ranges referenced by DIEs</span><br><span class="line">.debug_str                 String table used by.debug_info</span><br></pre></td></tr></table></figure></p>
+<p>其中主要信息存储在debug_info和debug_line里，debug_info存储了函数信息、变量信息等，debug_line存储了对应源代码行数信息。可以用dwarfdump工具读取dwarf文件里的section。使用dwarfdump读取下面demo dSYM文件的section</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">@interface DSYMDemo : NSObject</span><br><span class="line">@property (nonatomic, strong) NSString* var1;</span><br><span class="line">- (NSString*)test;</span><br><span class="line">@end</span><br></pre></td></tr></table></figure>
+<p>#####<em>debug_info</em></p>
+<p>使用dwarfdump读取DWARF文件debug_info信息<br><figure class="highlight shell"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">dwarfdump -e --debug-info DSYMDemo.app.dSYM/Contents/Resources/DWARF/DSYMDemo &gt; debug-info.txt</span><br></pre></td></tr></table></figure></p>
+<figure class="highlight html"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><span class="line">0x00034d29:     function [119] *</span><br><span class="line">                low pc( 0x0000000100006adc )</span><br><span class="line">                high pc( 0x0000000100006b14 )</span><br><span class="line">                frame base( reg29 )</span><br><span class="line">                object pointer( &#123;0x00034d49&#125; )</span><br><span class="line">                name( "-[DSYMDemo setVar1:]" )</span><br><span class="line">                decl file( "/Users/haishengding/Desktop/test/DSYMDemo/DSYMDemo/DSYMDemo.h" )</span><br><span class="line">                decl line( 13 )</span><br><span class="line">                prototyped( 0x01 )</span><br><span class="line">                artificial( 0x01 )</span><br><span class="line">                APPLE optimized( 0x01 )</span><br></pre></td></tr></table></figure>
+<p>可以看到DIE里面包括了函数开始地址、结束地址、函数名、原文件名、开始地址在原文件的行数。对于给定的地址，找到函数开始地址和结束地址之间包含改地址的DIE，则可以还原函数名和原文件名。</p>
+<p>#####<em>debug_line</em></p>
+<p>通过debug_info还原了函数名、原文件名，剩下原文行数则通过debug_line进行还原<br><figure class="highlight shell"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">dwarfdump -e --debug-line DSYMDemo.app.dSYM/Contents/Resources/DWARF/DSYMDemo &gt; debug-line.txt</span><br></pre></td></tr></table></figure></p>
+<figure class="highlight html"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><span class="line">Address                Line  File</span><br><span class="line">------------------ ------ ------------------------------</span><br><span class="line">0x0000000100006ac0     13 ~/Desktop/test/DSYMDemo/DSYMDemo/DSYMDemo.m</span><br><span class="line">0x0000000100006ac0     14</span><br><span class="line">0x0000000100006acc     13 ~/Desktop/test/DSYMDemo/DSYMDemo/DSYMDemo.h</span><br><span class="line">0x0000000100006acc     13</span><br><span class="line">0x0000000100006adc     13</span><br><span class="line">0x0000000100006aec      0</span><br><span class="line">0x0000000100006b14     11 ~/Desktop/test/DSYMDemo/DSYMDemo/DSYMDemo.m</span><br><span class="line">0x0000000100006b14     11</span><br><span class="line">0x0000000100006b28     11</span><br></pre></td></tr></table></figure>
+<p>可以看到debug_line里面包含了每个代码地址对应的行数。</p>
+<p>###怎么找这些信息</p>
+<p>已经知道对于指定的地址，通过dSYM文件可以还原符号信息，但怎么拿到这个地址呢？开始的函数栈frame有一个地址，就是这个地址吗？当然没这么简单，我们知道image加载的时候都会相对基地址进行重定位，并且每次加载的基地址都不一样，函数栈frame的地址是重定位后的绝对地址，我们要的是重定位前的相对地址。</p>
+<p>####Binary Images<br><figure class="highlight html"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">Binary Images:</span><br><span class="line">0x100050000 - 0x101c07fff +AppName arm64 <span class="tag">&lt;<span class="name">ab90a1c5646f35dca8f8cf1ce74c767c</span>&gt;</span> /var/containers/Bundle/Application/175ED3FA-7329-49DE-B54A-88EEC120412C/AppName.app/AppName</span><br><span class="line">0x187ee6000 - 0x187eeffff  libsystem_pthread.dylib arm64 <span class="tag">&lt;<span class="name">d8480fc3a35d3475b0d12553c761d8cb</span>&gt;</span> /usr/lib/system/libsystem_pthread.dylib</span><br><span class="line">0x187e04000 - 0x187e28fff  libsystem_kernel.dylib arm64</span><br></pre></td></tr></table></figure></p>
+<p>可以看到Crash Log的Binary Images块包含每个image加载起止地址、image名、arm架构、uuid、image路径。<br><figure class="highlight html"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">frame</span><br><span class="line">0   AppName   0x00000001009e3110 _ZNSt3__111char_traitsIcE2eqEcc + 7884972</span><br></pre></td></tr></table></figure></p>
+<figure class="highlight html"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">Binary Image</span><br><span class="line">0x100050000 - 0x101c07fff +AppName arm64 <span class="tag">&lt;<span class="name">ab90a1c5646f35dca8f8cf1ce74c767c</span>&gt;</span> /var/containers/Bundle/Application/175ED3FA-7329-49DE-B54A-88EEC120412C/AppName.app/AppName</span><br></pre></td></tr></table></figure>
+<p>frame0的地址<em>0x00000001009e3110－0x100050000</em> 就是函数的相对地址，使用改地址通过dSYM文件就可以还原符号。</p>
+<p>####UUID</p>
+<p>符号还原的时候必须通过匹配的dSYM，dSYM和image是通过UUID进行关联的，两者的UUID必须一样才能正确还原，image的UUID在Binary Images可以拿到，dSYM 的UUID可以通过dwarfdump读取<br><figure class="highlight shell"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">dwarfdump -u -arch arm64 AppName.app.dSYM/Contents/Resources/DWARF/AppName</span><br><span class="line">UUID: AB90A1C5-646F-35DC-A8F8-CF1CE74C767C (arm64) AppName.app.dSYM/Contents/Resources/DWARF/AppName</span><br></pre></td></tr></table></figure></p>
+<p>可以看到读取的跟image里的是一样的。</p>
+<p>###使用atos命令行</p>
+<p>上面讲了符号还原的原理，实际上atos工具帮我们做了这些事情，只要通过简单的命令就看还原了<br><figure class="highlight shell"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">atos -o AppName.app.dSYM/Contents/Resources/DWARF/AppName -arch arm64 -l 0x100050000 0x00000001009e3110</span><br><span class="line">currentCallStack (in AppName) (xxx.m:17)</span><br></pre></td></tr></table></figure></p>
+<p>其中<em>0x100050000</em>是image加载地址，<em> 0x00000001009e3110</em>是需要符号还原的绝对地址，atos自己会转成相对地址</p>
+<p>###系统符号</p>
+<p>dSYM文件只有我们自己代码的符号，系统函数则必须通过系统符号文件进行还原，系统符号一般存储在~/Library/Developer/Xcode/iOS DeviceSupport目录<br><figure class="highlight html"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">0x187ee6000 - 0x187eeffff  libsystem_pthread.dylib arm64 <span class="tag">&lt;<span class="name">d8480fc3a35d3475b0d12553c761d8cb</span>&gt;</span> /usr/lib/system/libsystem_pthread.dylib</span><br><span class="line">OS Version: iPhone OS 10.2 (14C92)</span><br></pre></td></tr></table></figure></p>
+<p>通过Crash Log文件Bianry Images和OS Version信息可找到对应的符号文件。</p>
+<p>###脚本化</p>
+<p>知道怎么还原具体frame栈桢的符号了，通个脚本解析每个栈桢就可以自动化还原整个栈了，像buggly平台应该也是用类似的方案。</p>
+<p><em>以上内容为本人工作学习中所得，如有错误之处，还请指出！</em></p>
+<p>###参考文件</p>
+<p><a href="https://possiblemobile.com/2015/03/symbolicating-your-ios-crash-reports/" title="Symbolicating Your iOS Crash Reports" target="_blank" rel="noopener">Symbolicating Your iOS Crash Reports</a><br><a href="https://developer.apple.com/library/content/technotes/tn2151/_index.html#//apple_ref/doc/uid/DTS40008184" title="Understanding and Analyzing Application Crash Reports" target="_blank" rel="noopener">Understanding and Analyzing Application Crash Reports</a><br><a href="http://www.dwarfstd.org/doc/Debugging%20using%20DWARF.pdf" title="Introduction to the DWARF Debugging Format" target="_blank" rel="noopener">Introduction to the DWARF Debugging Format</a></p>
+
+          
+        
+      
+    </div>
+
+    
+
+    
+    
+    
+
+    
+
+    
+      
+    
+    
+
+    
+
+    <footer class="post-footer">
+      
+
+      
+
+      
+
+      
+      
+        <div class="post-eof"></div>
+      
+    </footer>
+  </div>
+  
+  
+  
+  </article>
+
+
+    
+      
+
+  
+
+  
+  
+  
+
+  
+
+  <article class="post post-type-normal" itemscope itemtype="http://schema.org/Article">
+  
+  
+  
+  <div class="post-block">
+    <link itemprop="mainEntityOfPage" href="http://yoursite.com/2019/05/13/iOS-WebView的一些总结/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="name" content="Alex Ting">
+      <meta itemprop="description" content="守护心中的那一亩田">
+      <meta itemprop="image" content="/images/avatar.gif">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Alex's Blog">
+    </span>
+
+    
+      <header class="post-header">
+
+        
+        
+          <h1 class="post-title" itemprop="name headline">
+                
+                
+                <a href="/2019/05/13/iOS-WebView的一些总结/" class="post-title-link" itemprop="url">iOS WebView的一些总结</a>
+              
+            
+          </h1>
+        
+
+        <div class="post-meta">
+          <span class="post-time">
+
+            
+            
+            
+
+            
+              <span class="post-meta-item-icon">
+                <i class="fa fa-calendar-o"></i>
+              </span>
+              
+                <span class="post-meta-item-text">Posted on</span>
+              
+
+              
+                
+              
+
+              <time title="Created: 2019-05-13 21:07:48 / Modified: 21:11:09" itemprop="dateCreated datePublished" datetime="2019-05-13T21:07:48+08:00">2019-05-13</time>
+            
+
+            
+              
+
+              
+            
+          </span>
+
+          
+            <span class="post-category">
+            
+              <span class="post-meta-divider">|</span>
+            
+              <span class="post-meta-item-icon">
+                <i class="fa fa-folder-o"></i>
+              </span>
+              
+                <span class="post-meta-item-text">In</span>
+              
+              
+                <span itemprop="about" itemscope itemtype="http://schema.org/Thing"><a href="/categories/iOS/" itemprop="url" rel="index"><span itemprop="name">iOS</span></a></span>
+
+                
+                
+              
+            </span>
+          
+
+          
+            
+            
+          
+
+          
+          
+
+          
+
+          
+
+          
+
+        </div>
+      </header>
+    
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+      
+
+      
+        
+          
+            <blockquote>
+<p>app开发中一些重运营业务大多都通过web来实现快速迭代，iOS可以使用UIWebView、WKWebView实现Native和Web的交互。之前在项目中负责过WebView模块，所以在这里做一些WebView的总结，主要从包括以下一些点：</p>
+</blockquote>
+<ol>
+<li>为什么要封装WebView</li>
+<li>JSBridge</li>
+<li>离线包</li>
+<li>WKWebView</li>
+</ol>
+<h2 id="为什么要封装WebView"><a href="#为什么要封装WebView" class="headerlink" title="为什么要封装WebView"></a>为什么要封装WebView</h2><p>我们项目中把WebView封装成了一个ViewController，可能很多人会觉得iOS里要现实web不就直接用UIWebView和WKWebView吗，为什么还要进行封装，我觉的主要是从下面点来考虑：</p>
+<ol>
+<li>统一ui样式。包括导航条，进度条，错误页面等，避免重复造轮子。</li>
+<li>封装基础能力。抽象业务无关的基础能力，比如导航条设置（更改导航条颜色，设置ButtonItem）、cookie设置、UA设置、JSBridge、数据上报等</li>
+<li>hook request。进行安全校验，鉴权处理</li>
+</ol>
+<h2 id="JSBridge"><a href="#JSBridge" class="headerlink" title="JSBridge"></a>JSBridge</h2><p>iOS SDK 直接支持native调用js，UIWebView调用stringByEvaluatingJavaScriptFromString，WKWebView调用evaluateJavaScript: completionHandler</p>
+<p>iOS SDK 没有天生支持 js 和 native 相互调用，都是自己实现一套调用机制，目前主要有下面几种方法:</p>
+<ol>
+<li>通过iframe<br>通过创建iframe，然后在webview delegate hook请求</li>
+<li>JavaScriptCore<br>iOS 7开始引进了JavaScriptCore可以方便高效实现JS和oc之间的调用</li>
+<li>WKScriptMessageHandler<br>WKWebView可以使用WKScriptMessageHandler来实现JS调用oc方法</li>
+</ol>
+<h2 id="离线包"><a href="#离线包" class="headerlink" title="离线包"></a>离线包</h2><p>主要是通过NSURLProtocol hook request来实现离线包，严格来说跟WebView没半毛钱关系。</p>
+<p>WKWebView<br>iOS8引入了WKWebView，WKWebView使用独立的进程渲染web，解决了UIWebView内存泄漏和crash率高的问题，但是理想虽然很丰满，现实却很骨感，实际使用WKWebView还是会有很多问题。之前在项目中做过切换WKWebView，刚好可以总结下遇到的问题和解决方法，主要有下面问题：</p>
+<ol>
+<li>没法直接设置Cookie<br>WKWebView不使用NSHTTPCookieStorage，所以没法直接设置Cookie，app中web请求一般都会通过cookie带登录态到后台，如果没法设置cookie的话是没法正常工作的。尝试过几种方案后我们最终是通过request header把cookie带到server，同时通过WKUserScript把cookie种到本地。</li>
+<li>不经过URL Load System<br>这样就不能使用NSURLProtocol来实现离线包和定制request了</li>
+</ol>
 
           
         
@@ -540,7 +1867,7 @@
                 
                   <a href="/archives/">
                 
-                    <span class="site-state-item-count">1</span>
+                    <span class="site-state-item-count">7</span>
                     <span class="site-state-item-name">posts</span>
                   </a>
                 </div>
@@ -559,7 +1886,9 @@
                     
                       
                     
-                    <span class="site-state-item-count">1</span>
+                      
+                    
+                    <span class="site-state-item-count">2</span>
                     <span class="site-state-item-name">categories</span>
                   </a>
                 </div>
@@ -580,7 +1909,11 @@
                     
                       
                     
-                    <span class="site-state-item-count">2</span>
+                      
+                    
+                      
+                    
+                    <span class="site-state-item-count">4</span>
                     <span class="site-state-item-name">tags</span>
                   </a>
                 </div>

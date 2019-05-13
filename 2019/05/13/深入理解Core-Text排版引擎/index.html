@@ -1,0 +1,944 @@
+<!DOCTYPE html>
+
+
+
+
+
+
+
+
+
+
+
+
+  
+
+
+<html class="theme-next pisces use-motion" lang>
+<head><meta name="generator" content="Hexo 3.8.0">
+  <meta charset="UTF-8">
+<meta http-equiv="X-UA-Compatible" content="IE=edge">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=2">
+<meta name="theme-color" content="#222">
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<link rel="stylesheet" href="/lib/font-awesome/css/font-awesome.min.css?v=4.6.2">
+
+<link rel="stylesheet" href="/css/main.css?v=7.1.1">
+
+
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon-next.png?v=7.1.1">
+
+
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32x32-next.png?v=7.1.1">
+
+
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/favicon-16x16-next.png?v=7.1.1">
+
+
+  <link rel="mask-icon" href="/images/logo.svg?v=7.1.1" color="#222">
+
+
+
+
+
+
+
+<script id="hexo.configurations">
+  var NexT = window.NexT || {};
+  var CONFIG = {
+    root: '/',
+    scheme: 'Pisces',
+    version: '7.1.1',
+    sidebar: {"position":"left","display":"post","offset":12,"onmobile":false,"dimmer":false},
+    back2top: true,
+    back2top_sidebar: true,
+    fancybox: false,
+    fastclick: false,
+    lazyload: false,
+    tabs: true,
+    motion: {"enable":true,"async":false,"transition":{"post_block":"fadeIn","post_header":"slideDownIn","post_body":"slideDownIn","coll_header":"slideLeftIn","sidebar":"slideUpIn"}},
+    algolia: {
+      applicationID: '',
+      apiKey: '',
+      indexName: '',
+      hits: {"per_page":10},
+      labels: {"input_placeholder":"Search for Posts","hits_empty":"We didn't find any results for the search: ${query}","hits_stats":"${hits} results found in ${time} ms"}
+    }
+  };
+</script>
+
+
+  
+
+
+
+
+  <meta name="description" content="iOS系统上可以使用UILable、UITextFileld、TextKit显示文本，TextKit也可以做一些布局控制，但如果需要精细的布局控制，或者自线程异步绘制文本，就必须使用Core Text和Core Graphics，本文比较系统地讲解Core Text排版核心概念。  iOS文本系统框架 Core Text是iOS 系统文本排版核心框架，TextKit和WebKit都是封装在Cor">
+<meta name="keywords" content="iOS">
+<meta property="og:type" content="article">
+<meta property="og:title" content="深入理解Core Text排版引擎">
+<meta property="og:url" content="http://yoursite.com/2019/05/13/深入理解Core-Text排版引擎/index.html">
+<meta property="og:site_name" content="Alex&#39;s Blog">
+<meta property="og:description" content="iOS系统上可以使用UILable、UITextFileld、TextKit显示文本，TextKit也可以做一些布局控制，但如果需要精细的布局控制，或者自线程异步绘制文本，就必须使用Core Text和Core Graphics，本文比较系统地讲解Core Text排版核心概念。  iOS文本系统框架 Core Text是iOS 系统文本排版核心框架，TextKit和WebKit都是封装在Cor">
+<meta property="og:locale" content="default">
+<meta property="og:image" content="https://upload-images.jianshu.io/upload_images/1368199-a4e7a1021001f631.png?imageMogr2/auto-orient/strip%7CimageView2/2/w/1240">
+<meta property="og:image" content="https://upload-images.jianshu.io/upload_images/1368199-3a8ddc2329293d34.jpg?imageMogr2/auto-orient/strip%7CimageView2/2/w/1240">
+<meta property="og:image" content="https://upload-images.jianshu.io/upload_images/1368199-a25e5f9adf650f28.jpg?imageMogr2/auto-orient/strip%7CimageView2/2/w/1240">
+<meta property="og:image" content="https://upload-images.jianshu.io/upload_images/1368199-77478e0dc902b807.png?imageMogr2/auto-orient/strip%7CimageView2/2/w/1240">
+<meta property="og:image" content="https://upload-images.jianshu.io/upload_images/1368199-f12e553c46c791d7.jpg?imageMogr2/auto-orient/strip%7CimageView2/2/w/1240">
+<meta property="og:image" content="https://upload-images.jianshu.io/upload_images/1368199-42c1816d5c36dd93.jpg?imageMogr2/auto-orient/strip%7CimageView2/2/w/1240">
+<meta property="og:image" content="https://upload-images.jianshu.io/upload_images/1368199-36fa8a053a65dda1.jpg?imageMogr2/auto-orient/strip%7CimageView2/2/w/1240">
+<meta property="og:image" content="https://upload-images.jianshu.io/upload_images/1368199-59031ca27d4339ae.jpg?imageMogr2/auto-orient/strip%7CimageView2/2/w/1240">
+<meta property="og:image" content="https://upload-images.jianshu.io/upload_images/1368199-0008a5aed555f358.jpg?imageMogr2/auto-orient/strip%7CimageView2/2/w/1240">
+<meta property="og:image" content="https://upload-images.jianshu.io/upload_images/1368199-fb224b8e4c700f2d.jpg?imageMogr2/auto-orient/strip%7CimageView2/2/w/1240">
+<meta property="og:image" content="https://upload-images.jianshu.io/upload_images/1368199-b9f610d53eb49de3.jpg?imageMogr2/auto-orient/strip%7CimageView2/2/w/1240">
+<meta property="og:image" content="https://upload-images.jianshu.io/upload_images/1368199-74a02fa304dfa411.jpg?imageMogr2/auto-orient/strip%7CimageView2/2/w/1240">
+<meta property="og:image" content="https://upload-images.jianshu.io/upload_images/1368199-adf30405300a7872.jpg?imageMogr2/auto-orient/strip%7CimageView2/2/w/1240">
+<meta property="og:updated_time" content="2019-05-13T13:18:38.808Z">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:title" content="深入理解Core Text排版引擎">
+<meta name="twitter:description" content="iOS系统上可以使用UILable、UITextFileld、TextKit显示文本，TextKit也可以做一些布局控制，但如果需要精细的布局控制，或者自线程异步绘制文本，就必须使用Core Text和Core Graphics，本文比较系统地讲解Core Text排版核心概念。  iOS文本系统框架 Core Text是iOS 系统文本排版核心框架，TextKit和WebKit都是封装在Cor">
+<meta name="twitter:image" content="https://upload-images.jianshu.io/upload_images/1368199-a4e7a1021001f631.png?imageMogr2/auto-orient/strip%7CimageView2/2/w/1240">
+
+
+
+
+
+  
+  
+  <link rel="canonical" href="http://yoursite.com/2019/05/13/深入理解Core-Text排版引擎/">
+
+
+
+<script id="page.configurations">
+  CONFIG.page = {
+    sidebar: "",
+  };
+</script>
+
+  <title>深入理解Core Text排版引擎 | Alex's Blog</title>
+  
+
+
+
+
+
+
+
+
+
+
+
+
+  <noscript>
+  <style>
+  .use-motion .motion-element,
+  .use-motion .brand,
+  .use-motion .menu-item,
+  .sidebar-inner,
+  .use-motion .post-block,
+  .use-motion .pagination,
+  .use-motion .comments,
+  .use-motion .post-header,
+  .use-motion .post-body,
+  .use-motion .collection-title { opacity: initial; }
+
+  .use-motion .logo,
+  .use-motion .site-title,
+  .use-motion .site-subtitle {
+    opacity: initial;
+    top: initial;
+  }
+
+  .use-motion .logo-line-before i { left: initial; }
+  .use-motion .logo-line-after i { right: initial; }
+  </style>
+</noscript>
+
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage" lang="default">
+
+  
+  
+    
+  
+
+  <div class="container sidebar-position-left page-post-detail">
+    <div class="headband"></div>
+
+    <header id="header" class="header" itemscope itemtype="http://schema.org/WPHeader">
+      <div class="header-inner"><div class="site-brand-wrapper">
+  <div class="site-meta">
+    
+
+    <div class="custom-logo-site-title">
+      <a href="/" class="brand" rel="start">
+        <span class="logo-line-before"><i></i></span>
+        <span class="site-title">Alex's Blog</span>
+        <span class="logo-line-after"><i></i></span>
+      </a>
+    </div>
+    
+      
+        <p class="site-subtitle">起风了，唯有努力生存</p>
+      
+    
+    
+  </div>
+
+  <div class="site-nav-toggle">
+    <button aria-label="Toggle navigation bar">
+      <span class="btn-bar"></span>
+      <span class="btn-bar"></span>
+      <span class="btn-bar"></span>
+    </button>
+  </div>
+</div>
+
+
+
+<nav class="site-nav">
+  
+    <ul id="menu" class="menu">
+      
+        
+        
+        
+          
+          <li class="menu-item menu-item-home">
+
+    
+    
+    
+      
+    
+
+    
+
+    <a href="/" rel="section"><i class="menu-item-icon fa fa-fw fa-home"></i> <br>Home</a>
+
+  </li>
+        
+        
+        
+          
+          <li class="menu-item menu-item-about">
+
+    
+    
+    
+      
+    
+
+    
+
+    <a href="/about/" rel="section"><i class="menu-item-icon fa fa-fw fa-user"></i> <br>About</a>
+
+  </li>
+        
+        
+        
+          
+          <li class="menu-item menu-item-tags">
+
+    
+    
+    
+      
+    
+
+    
+
+    <a href="/tags/" rel="section"><i class="menu-item-icon fa fa-fw fa-tags"></i> <br>Tags</a>
+
+  </li>
+        
+        
+        
+          
+          <li class="menu-item menu-item-categories">
+
+    
+    
+    
+      
+    
+
+    
+
+    <a href="/categories/" rel="section"><i class="menu-item-icon fa fa-fw fa-th"></i> <br>Categories</a>
+
+  </li>
+        
+        
+        
+          
+          <li class="menu-item menu-item-archives">
+
+    
+    
+    
+      
+    
+
+    
+
+    <a href="/archives/" rel="section"><i class="menu-item-icon fa fa-fw fa-archive"></i> <br>Archives</a>
+
+  </li>
+
+      
+      
+    </ul>
+  
+
+  
+
+  
+</nav>
+
+
+
+  
+
+
+
+</div>
+    </header>
+
+    
+
+
+    <main id="main" class="main">
+      <div class="main-inner">
+        <div class="content-wrap">
+          
+            
+
+          
+          <div id="content" class="content">
+            
+
+  <div id="posts" class="posts-expand">
+    
+
+  
+
+  
+  
+  
+
+  
+
+  <article class="post post-type-normal" itemscope itemtype="http://schema.org/Article">
+  
+  
+  
+  <div class="post-block">
+    <link itemprop="mainEntityOfPage" href="http://yoursite.com/2019/05/13/深入理解Core-Text排版引擎/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="name" content="Alex Ting">
+      <meta itemprop="description" content="守护心中的那一亩田">
+      <meta itemprop="image" content="/images/avatar.gif">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Alex's Blog">
+    </span>
+
+    
+      <header class="post-header">
+
+        
+        
+          <h1 class="post-title" itemprop="name headline">深入理解Core Text排版引擎
+
+              
+            
+          </h1>
+        
+
+        <div class="post-meta">
+          <span class="post-time">
+
+            
+            
+            
+
+            
+              <span class="post-meta-item-icon">
+                <i class="fa fa-calendar-o"></i>
+              </span>
+              
+                <span class="post-meta-item-text">Posted on</span>
+              
+
+              
+                
+              
+
+              <time title="Created: 2019-05-13 21:17:53 / Modified: 21:18:38" itemprop="dateCreated datePublished" datetime="2019-05-13T21:17:53+08:00">2019-05-13</time>
+            
+
+            
+              
+
+              
+            
+          </span>
+
+          
+            <span class="post-category">
+            
+              <span class="post-meta-divider">|</span>
+            
+              <span class="post-meta-item-icon">
+                <i class="fa fa-folder-o"></i>
+              </span>
+              
+                <span class="post-meta-item-text">In</span>
+              
+              
+                <span itemprop="about" itemscope itemtype="http://schema.org/Thing"><a href="/categories/iOS/" itemprop="url" rel="index"><span itemprop="name">iOS</span></a></span>
+
+                
+                
+              
+            </span>
+          
+
+          
+            
+            
+          
+
+          
+          
+
+          
+
+          
+
+          
+
+        </div>
+      </header>
+    
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+      
+
+      
+        <blockquote>
+<p>iOS系统上可以使用UILable、UITextFileld、TextKit显示文本，TextKit也可以做一些布局控制，但如果需要精细的布局控制，或者自线程异步绘制文本，就必须使用Core Text和Core Graphics，本文比较系统地讲解Core Text排版核心概念。</p>
+</blockquote>
+<h2 id="iOS文本系统框架"><a href="#iOS文本系统框架" class="headerlink" title="iOS文本系统框架"></a>iOS文本系统框架</h2><p><img src="https://upload-images.jianshu.io/upload_images/1368199-a4e7a1021001f631.png?imageMogr2/auto-orient/strip%7CimageView2/2/w/1240" alt="iOS文本系统框架"></p>
+<p>Core Text是iOS 系统文本排版核心框架，TextKit和WebKit都是封装在CoreText上的，TextKit是iOS7引入的，在iOS7之前几乎所有的文本都是 WebKit 来处理的，包括UILable、UITextFileld等，TextKit是从Cocoa文本系统移植到iOS系统的。<br>文本渲染过程中Core Text只负责排版，具体的绘制操作是通过Core Graphics框架完成的。如果需要精细的排版控制可以使用Core Text，否则可以直接使用Text Kit。</p>
+<h2 id="Core-Text排版引擎框架"><a href="#Core-Text排版引擎框架" class="headerlink" title="Core Text排版引擎框架"></a>Core Text排版引擎框架</h2><p><img src="https://upload-images.jianshu.io/upload_images/1368199-3a8ddc2329293d34.jpg?imageMogr2/auto-orient/strip%7CimageView2/2/w/1240" alt="CoreText排版引擎框架"></p>
+<p>CTFramesetter是Core Text中最上层的类，CTFramesetter持有attributed string并创建CTTypesetter，实际排版由CTTypesetter完成。CTFrame类似于书本中的「页」，CTLine类似「行」，CTRun是一行中具有相同属性的连续字形。CTFrame、CTLine、CTRun都有对应的Draw方法绘制文本，其中CTRun支持最精细的控制。</p>
+<p><img src="https://upload-images.jianshu.io/upload_images/1368199-a25e5f9adf650f28.jpg?imageMogr2/auto-orient/strip%7CimageView2/2/w/1240" alt="CoreText排版引擎框架"></p>
+<h2 id="排版核心概念"><a href="#排版核心概念" class="headerlink" title="排版核心概念"></a>排版核心概念</h2><p>要实现精细的排版控制，就必须理解排版的概念，因为Core Text很多api都涉及到排版概念，这些概念是平台无关的，其他系统也一样适应。<br>排版引擎通过下面两步对文本进行排版：</p>
+<ul>
+<li>生成字形(glyph generation)</li>
+<li>字形布局(glyph layout)</li>
+</ul>
+<h4 id="字符-Characters-和字形-Glyphs"><a href="#字符-Characters-和字形-Glyphs" class="headerlink" title="字符(Characters)和字形(Glyphs)"></a>字符(Characters)和字形(Glyphs)</h4><p>字符和字形概念比较好理解，下图很直观<br><img src="https://upload-images.jianshu.io/upload_images/1368199-77478e0dc902b807.png?imageMogr2/auto-orient/strip%7CimageView2/2/w/1240" alt="Glyphs of the character A"></p>
+<h4 id="字型-Typefaces-和字体-Fonts"><a href="#字型-Typefaces-和字体-Fonts" class="headerlink" title="字型(Typefaces)和字体(Fonts)"></a>字型(Typefaces)和字体(Fonts)</h4><p>字型和字体的概念可能没这么好区分，直接引用官方文档的原话</p>
+<blockquote>
+<p>A <em>typeface</em> is a set of visually related shapes for some or all of the characters in a written language. </p>
+</blockquote>
+<blockquote>
+<p>A <em>font</em> is a series of glyphs depicting the characters in a consistent size, typeface, and typestyle.</p>
+</blockquote>
+<p>字体是字型的子集，字型也叫font family，比如下图：</p>
+<p><img src="https://upload-images.jianshu.io/upload_images/1368199-f12e553c46c791d7.jpg?imageMogr2/auto-orient/strip%7CimageView2/2/w/1240" alt="Fonts in the Times font family"></p>
+<h4 id="字体属性-Font-metrics"><a href="#字体属性-Font-metrics" class="headerlink" title="字体属性(Font metrics)"></a>字体属性(Font metrics)</h4><p>排版引擎要布局字型，就必须知道字型大小和怎样布局，这些信息就叫字体属性，开发过程也是通过这些属性来计算布局的。字体属性由字体设计者提供，同一个字体不同字形的属性相同，主要属性如下图：</p>
+<p><img src="https://upload-images.jianshu.io/upload_images/1368199-42c1816d5c36dd93.jpg?imageMogr2/auto-orient/strip%7CimageView2/2/w/1240" alt="Glyph metrics"></p>
+<p><img src="https://upload-images.jianshu.io/upload_images/1368199-36fa8a053a65dda1.jpg?imageMogr2/auto-orient/strip%7CimageView2/2/w/1240" alt="Glyph metrics"></p>
+<ul>
+<li>baseline：字符基线，baseline是虚拟的线，baseline让尽可能多的字形在baseline上面，CTFrameGetLineOrigins获取的Origins就是每一行第一个CTRun的Origin</li>
+<li>ascent：字形最高点到baseline的推荐距离</li>
+<li>descent：字形最低点到baseline的推荐距离</li>
+<li>leading：行间距，即前一行的descent与下一行的ascent之间的距离</li>
+<li>advance width：Origin到下一个字形Origin的距离</li>
+<li>left-side bearing：Origin到字形最左边的距离</li>
+<li>right-side bearing：字形最右边到下一个字形Origin的距离</li>
+<li>bounding box：包含字形最小矩形</li>
+<li>x-height：一般指小写字母x最高的到baseline的推荐距离</li>
+<li>Cap-height：一般指H或I最高的到baseline的推荐距离</li>
+</ul>
+<p>部分字体属性可以通过UIFont的方法获取，ascent、descent、leading可以通过CTRunGetTypographicBounds、CTRunGetTypographicBounds方法获取，通过ascent、descent、leading可以计算line的实际高度。CTFrame、CTLine、CTRun都有提供api获取属性和绘制文本，控制粒度也由高到低，可以根据具体需求使用不同的粒度。<br>CTLine上不同CTRun默认是底部对齐的，如果一行文本有Attachment，并且Attachment比字体高，会导致字符偏下，如下图：</p>
+<p><img src="https://upload-images.jianshu.io/upload_images/1368199-59031ca27d4339ae.jpg?imageMogr2/auto-orient/strip%7CimageView2/2/w/1240" alt="带有Attachment的文本渲染"></p>
+<p>如果要使字符居中对齐，可以通过CGContextSetTextPosition调整每个CTRun的originY，调整后如下图：</p>
+<p><img src="https://upload-images.jianshu.io/upload_images/1368199-0008a5aed555f358.jpg?imageMogr2/auto-orient/strip%7CimageView2/2/w/1240" alt="垂直方向居中"></p>
+<h4 id="字距调整"><a href="#字距调整" class="headerlink" title="字距调整"></a>字距调整</h4><p>排版系统默认按advance width逐个字符渲染，这样会导致有些字符间距离很大，为了使排版后可读性更高，一般会调整字距，如下图：</p>
+<p><img src="https://upload-images.jianshu.io/upload_images/1368199-fb224b8e4c700f2d.jpg?imageMogr2/auto-orient/strip%7CimageView2/2/w/1240" alt="Kerning"></p>
+<h2 id="坐标系变换"><a href="#坐标系变换" class="headerlink" title="坐标系变换"></a>坐标系变换</h2><p>UIKit和Core Graphics使用不同的坐标系，UIKit坐标系原点在左上角，Core Graphics坐标系在左下角，如下图：</p>
+<p><img src="https://upload-images.jianshu.io/upload_images/1368199-b9f610d53eb49de3.jpg?imageMogr2/auto-orient/strip%7CimageView2/2/w/1240" alt="Core Graphics和UIKit坐标系"></p>
+<p>使用Core Graphics绘制前必须进行坐标变换，否则绘制后的文本是倒立的，<br>如下图：</p>
+<p><img src="https://upload-images.jianshu.io/upload_images/1368199-74a02fa304dfa411.jpg?imageMogr2/auto-orient/strip%7CimageView2/2/w/1240" alt="坐标未变换"></p>
+<p>坐标一般通过下面方法进行变换：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">//1.设置字形的变换矩阵为不做图形变换</span><br><span class="line">CGContextSetTextMatrix(context, CGAffineTransformIdentity);</span><br><span class="line">//2.平移方法，将画布向上平移bounds的高度</span><br><span class="line">CGContextTranslateCTM(context, 0.0f, self.bounds.size.height);</span><br><span class="line">//3.缩放方法，x轴缩放系数为1，则不变，y轴缩放系数为-1，则相当于以x轴为轴旋转180度</span><br><span class="line">CGContextScaleCTM(context, 1.0f, -1.0f);</span><br></pre></td></tr></table></figure>
+<p>变换之后就将Core Graphics坐标系变换成UIKit坐标系了。</p>
+<h2 id="Attachment"><a href="#Attachment" class="headerlink" title="Attachment"></a>Attachment</h2><p>Core Text 不能直接绘制图像，但可以留出空白空间来为图像腾出空间。通过设置 CTRun 的 delegate，可以确定 CTRun 的 ascent space, descent space and width，如下图：</p>
+<p><img src="https://upload-images.jianshu.io/upload_images/1368199-adf30405300a7872.jpg?imageMogr2/auto-orient/strip%7CimageView2/2/w/1240" alt="Attachment渲染"></p>
+<p>当Core Text遇到一个设置了CTRunDelegate的CTRun，它就会询问delegate：“我需要留多少空间给这块的数据”。通过在CTRunDelegate中设置这些属性，您可以在文本中给图片留开空位。具体方法可以参考「 <a href="https://www.raywenderlich.com/153591/core-text-tutorial-ios-making-magazine-app" title="Core Text Tutorial for iOS: Making a Magazine App" target="_blank" rel="noopener">Core Text Tutorial for iOS: Making a Magazine App</a> 」</p>
+<h2 id="点击响应"><a href="#点击响应" class="headerlink" title="点击响应"></a>点击响应</h2><p>使用文本渲染的时候经常需要不同的文本响应不同的点击事件，Core Text本身是不支持点击事件的，要实现不同的文本响应不同的点击事件，就必须知道点击的是哪个字符，核心过程：</p>
+<ul>
+<li>重写UIView Touch Event方法捕捉点击事件</li>
+<li>通过Core Text查找touch point对应的字符</li>
+</ul>
+<p>这里主要讲下如何通过Core Text查找touch point对应的字符，核心代码如下：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br></pre></td><td class="code"><pre><span class="line">- (CFIndex)characterIndexAtPoint:(CGPoint)p &#123;</span><br><span class="line">    CFIndex idx = NSNotFound;</span><br><span class="line">    if (!_lines) &#123;</span><br><span class="line">        return idx;</span><br><span class="line">    &#125;</span><br><span class="line">    CGPoint *linesOrigins = (CGPoint*)malloc(sizeof(CGPoint) * CFArrayGetCount(_lines));</span><br><span class="line">    if (!linesOrigins) &#123;</span><br><span class="line">        return idx;</span><br><span class="line">    &#125;</span><br><span class="line">    </span><br><span class="line">    p = CGPointMake(p.x - _rect.origin.x, p.y - _rect.origin.y);</span><br><span class="line">    // Convert tap coordinates (start at top left) to CT coordinates (start at bottom left)</span><br><span class="line">    p = CGPointMake(p.x, _rect.size.height - p.y);</span><br><span class="line">    </span><br><span class="line">    CTFrameGetLineOrigins(_frame, CFRangeMake(0, 0), linesOrigins);</span><br><span class="line">    </span><br><span class="line">    for (CFIndex lineIndex = 0; lineIndex &lt; _fitNumberOfLines; lineIndex++) &#123;</span><br><span class="line">        CGPoint lineOrigin = linesOrigins[lineIndex];</span><br><span class="line">        CTLineRef line = CFArrayGetValueAtIndex(_lines, lineIndex);</span><br><span class="line">        </span><br><span class="line">        // Get bounding information of line</span><br><span class="line">        CGFloat ascent = 0.0f, descent = 0.0f, leading = 0.0f;</span><br><span class="line">        CGFloat width = (CGFloat)CTLineGetTypographicBounds(line, &amp;ascent, &amp;descent, &amp;leading);</span><br><span class="line">        CGFloat yMin = (CGFloat)floor(lineOrigin.y - descent);</span><br><span class="line">        CGFloat yMax = (CGFloat)ceil(lineOrigin.y + ascent);</span><br><span class="line">        </span><br><span class="line">        // Apply penOffset using flushFactor for horizontal alignment to set lineOrigin since this is the horizontal offset from drawFramesetter</span><br><span class="line">        CGFloat flushFactor = 0.0;;</span><br><span class="line">        CGFloat penOffset = (CGFloat)CTLineGetPenOffsetForFlush(line, flushFactor, _rect.size.width);</span><br><span class="line">        lineOrigin.x = penOffset;</span><br><span class="line">        lineOrigin.y = lineOrigin.y - _originY;</span><br><span class="line">        </span><br><span class="line">        // Check if we&apos;ve already passed the line</span><br><span class="line">        if (p.y &gt; yMax) &#123;</span><br><span class="line">            break;</span><br><span class="line">        &#125;</span><br><span class="line">        // Check if the point is within this line vertically</span><br><span class="line">        if (p.y &gt;= yMin) &#123;</span><br><span class="line">            // Check if the point is within this line horizontally</span><br><span class="line">            if (p.x &gt;= lineOrigin.x &amp;&amp; p.x &lt;= lineOrigin.x + width) &#123;</span><br><span class="line">                // Convert CT coordinates to line-relative coordinates</span><br><span class="line">                CGPoint relativePoint = CGPointMake(p.x - lineOrigin.x, p.y - lineOrigin.y);</span><br><span class="line">                idx = CTLineGetStringIndexForPosition(line, relativePoint);</span><br><span class="line">                break;</span><br><span class="line">            &#125;</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line">    free(linesOrigins);</span><br><span class="line">    return idx;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<h2 id="引用"><a href="#引用" class="headerlink" title="引用"></a>引用</h2><p><a href="https://developer.apple.com/library/archive/documentation/GraphicsImaging/Conceptual/drawingwithquartz2d/Introduction/Introduction.html#//apple_ref/doc/uid/TP40007533-SW1" target="_blank" rel="noopener">Quartz 2D Programming Guide</a><br><a href="https://developer.apple.com/library/archive/documentation/StringsTextFonts/Conceptual/CoreText_Programming/Introduction/Introduction.html#//apple_ref/doc/uid/TP40005533-CH1-SW1" target="_blank" rel="noopener">Core Text Programming Guide</a><br><a href="https://developer.apple.com/library/archive/documentation/StringsTextFonts/Conceptual/TextAndWebiPhoneOS/Introduction/Introduction.html#//apple_ref/doc/uid/TP40009542-CH1-SW1" target="_blank" rel="noopener">Text Programming Guide for iOS</a><br><a href="https://developer.apple.com/library/archive/documentation/TextFonts/Conceptual/CocoaTextArchitecture/Introduction/Introduction.html#//apple_ref/doc/uid/TP40009459" target="_blank" rel="noopener">Cocoa Text Architecture Guide</a><br> <a href="https://www.raywenderlich.com/153591/core-text-tutorial-ios-making-magazine-app" title="Core Text Tutorial for iOS: Making a Magazine App" target="_blank" rel="noopener">Core Text Tutorial for iOS: Making a Magazine App</a><br><a href="https://www.objccn.io/issue-5-1/" target="_blank" rel="noopener">初识 TextKit</a><br><a href="https://en.wikipedia.org/wiki/Font" target="_blank" rel="noopener">Font wiki</a></p>
+
+      
+    </div>
+
+    
+
+    
+    
+    
+
+    
+
+    
+      
+    
+    
+
+    
+
+    <footer class="post-footer">
+      
+        <div class="post-tags">
+          
+            <a href="/tags/iOS/" rel="tag"># iOS</a>
+          
+        </div>
+      
+
+      
+      
+      
+
+      
+        <div class="post-nav">
+          <div class="post-nav-next post-nav-item">
+            
+              <a href="/2019/05/13/iOS-App自动监控Zombie对象方案/" rel="next" title="iOS App自动监控Zombie对象方案">
+                <i class="fa fa-chevron-left"></i> iOS App自动监控Zombie对象方案
+              </a>
+            
+          </div>
+
+          <span class="post-nav-divider"></span>
+
+          <div class="post-nav-prev post-nav-item">
+            
+              <a href="/2019/05/13/objc-msgSend汇编源码分析/" rel="prev" title="objc_msgSend汇编源码分析">
+                objc_msgSend汇编源码分析 <i class="fa fa-chevron-right"></i>
+              </a>
+            
+          </div>
+        </div>
+      
+
+      
+      
+    </footer>
+  </div>
+  
+  
+  
+  </article>
+
+
+  </div>
+
+
+          </div>
+          
+
+  
+
+
+
+        </div>
+        
+          
+  
+  <div class="sidebar-toggle">
+    <div class="sidebar-toggle-line-wrap">
+      <span class="sidebar-toggle-line sidebar-toggle-line-first"></span>
+      <span class="sidebar-toggle-line sidebar-toggle-line-middle"></span>
+      <span class="sidebar-toggle-line sidebar-toggle-line-last"></span>
+    </div>
+  </div>
+
+  <aside id="sidebar" class="sidebar">
+    <div class="sidebar-inner">
+
+      
+
+      
+        <ul class="sidebar-nav motion-element">
+          <li class="sidebar-nav-toc sidebar-nav-active" data-target="post-toc-wrap">
+            Table of Contents
+          </li>
+          <li class="sidebar-nav-overview" data-target="site-overview-wrap">
+            Overview
+          </li>
+        </ul>
+      
+
+      <div class="site-overview-wrap sidebar-panel">
+        <div class="site-overview">
+          <div class="site-author motion-element" itemprop="author" itemscope itemtype="http://schema.org/Person">
+            
+              <p class="site-author-name" itemprop="name">Alex Ting</p>
+              <div class="site-description motion-element" itemprop="description">守护心中的那一亩田</div>
+          </div>
+
+          
+            <nav class="site-state motion-element">
+              
+                <div class="site-state-item site-state-posts">
+                
+                  <a href="/archives/">
+                
+                    <span class="site-state-item-count">7</span>
+                    <span class="site-state-item-name">posts</span>
+                  </a>
+                </div>
+              
+
+              
+                
+                
+                <div class="site-state-item site-state-categories">
+                  
+                    
+                      <a href="/categories/">
+                    
+                  
+                    
+                    
+                      
+                    
+                      
+                    
+                    <span class="site-state-item-count">2</span>
+                    <span class="site-state-item-name">categories</span>
+                  </a>
+                </div>
+              
+
+              
+                
+                
+                <div class="site-state-item site-state-tags">
+                  
+                    
+                      <a href="/tags/">
+                    
+                  
+                    
+                    
+                      
+                    
+                      
+                    
+                      
+                    
+                      
+                    
+                    <span class="site-state-item-count">4</span>
+                    <span class="site-state-item-name">tags</span>
+                  </a>
+                </div>
+              
+            </nav>
+          
+
+          
+
+          
+
+          
+            <div class="links-of-author motion-element">
+              
+                <span class="links-of-author-item">
+                  
+                  
+                    
+                  
+                  
+                    
+                  
+                  <a href="https://github.com/yourname" title="GitHub &rarr; https://github.com/yourname" rel="noopener" target="_blank"><i class="fa fa-fw fa-github"></i>GitHub</a>
+                </span>
+              
+                <span class="links-of-author-item">
+                  
+                  
+                    
+                  
+                  
+                    
+                  
+                  <a href="mailto:yourname@gmail.com" title="E-Mail &rarr; mailto:yourname@gmail.com" rel="noopener" target="_blank"><i class="fa fa-fw fa-envelope"></i>E-Mail</a>
+                </span>
+              
+            </div>
+          
+
+          
+
+          
+          
+
+          
+            
+          
+          
+
+        </div>
+      </div>
+
+      
+      <!--noindex-->
+        <div class="post-toc-wrap motion-element sidebar-panel sidebar-panel-active">
+          <div class="post-toc">
+
+            
+            
+            
+            
+
+            
+              <div class="post-toc-content"><ol class="nav"><li class="nav-item nav-level-2"><a class="nav-link" href="#iOS文本系统框架"><span class="nav-number">1.</span> <span class="nav-text">iOS文本系统框架</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#Core-Text排版引擎框架"><span class="nav-number">2.</span> <span class="nav-text">Core Text排版引擎框架</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#排版核心概念"><span class="nav-number">3.</span> <span class="nav-text">排版核心概念</span></a><ol class="nav-child"><li class="nav-item nav-level-4"><a class="nav-link" href="#字符-Characters-和字形-Glyphs"><span class="nav-number">3.0.1.</span> <span class="nav-text">字符(Characters)和字形(Glyphs)</span></a></li><li class="nav-item nav-level-4"><a class="nav-link" href="#字型-Typefaces-和字体-Fonts"><span class="nav-number">3.0.2.</span> <span class="nav-text">字型(Typefaces)和字体(Fonts)</span></a></li><li class="nav-item nav-level-4"><a class="nav-link" href="#字体属性-Font-metrics"><span class="nav-number">3.0.3.</span> <span class="nav-text">字体属性(Font metrics)</span></a></li><li class="nav-item nav-level-4"><a class="nav-link" href="#字距调整"><span class="nav-number">3.0.4.</span> <span class="nav-text">字距调整</span></a></li></ol></li></ol><li class="nav-item nav-level-2"><a class="nav-link" href="#坐标系变换"><span class="nav-number">4.</span> <span class="nav-text">坐标系变换</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#Attachment"><span class="nav-number">5.</span> <span class="nav-text">Attachment</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#点击响应"><span class="nav-number">6.</span> <span class="nav-text">点击响应</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#引用"><span class="nav-number">7.</span> <span class="nav-text">引用</span></a></li></div>
+            
+
+          </div>
+        </div>
+      <!--/noindex-->
+      
+
+      
+        <div class="back-to-top">
+          <i class="fa fa-arrow-up"></i>
+          
+        </div>
+      
+
+    </div>
+  </aside>
+  
+
+
+        
+      </div>
+    </main>
+
+    <footer id="footer" class="footer">
+      <div class="footer-inner">
+        <div class="copyright">&copy; <span itemprop="copyrightYear">2019</span>
+  <span class="with-love" id="animate">
+    <i class="fa fa-user"></i>
+  </span>
+  <span class="author" itemprop="copyrightHolder">Alex Ting</span>
+
+  
+
+  
+</div>
+
+
+  <div class="powered-by">Powered by <a href="https://hexo.io" class="theme-link" rel="noopener" target="_blank">Hexo</a> v3.8.0</div>
+
+
+
+  <span class="post-meta-divider">|</span>
+
+
+
+  <div class="theme-info">Theme – <a href="https://theme-next.org" class="theme-link" rel="noopener" target="_blank">NexT.Pisces</a> v7.1.1</div>
+
+
+
+
+        
+
+
+
+
+
+
+
+
+        
+      </div>
+    </footer>
+
+    
+
+    
+
+    
+
+    
+  </div>
+
+  
+
+<script>
+  if (Object.prototype.toString.call(window.Promise) !== '[object Function]') {
+    window.Promise = null;
+  }
+</script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  
+  <script src="/lib/jquery/index.js?v=2.1.3"></script>
+
+  
+  <script src="/lib/velocity/velocity.min.js?v=1.2.1"></script>
+
+  
+  <script src="/lib/velocity/velocity.ui.min.js?v=1.2.1"></script>
+
+
+  
+
+
+  <script src="/js/utils.js?v=7.1.1"></script>
+
+  <script src="/js/motion.js?v=7.1.1"></script>
+
+
+
+  
+  
+
+
+  <script src="/js/affix.js?v=7.1.1"></script>
+
+  <script src="/js/schemes/pisces.js?v=7.1.1"></script>
+
+
+
+  
+  <script src="/js/scrollspy.js?v=7.1.1"></script>
+<script src="/js/post-details.js?v=7.1.1"></script>
+
+
+
+  
+
+
+  <script src="/js/next-boot.js?v=7.1.1"></script>
+
+
+  
+
+  
+
+  
+
+  
+
+
+  
+
+
+  
+
+
+
+
+  
+
+  
+
+  
+
+  
+
+  
+
+  
+
+  
+
+  
+
+  
+
+  
+
+  
+
+  
+
+  
+
+  
+
+</body>
+</html>

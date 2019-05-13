@@ -1,0 +1,972 @@
+<!DOCTYPE html>
+
+
+
+
+
+
+
+
+
+
+
+
+  
+
+
+<html class="theme-next pisces use-motion" lang>
+<head><meta name="generator" content="Hexo 3.8.0">
+  <meta charset="UTF-8">
+<meta http-equiv="X-UA-Compatible" content="IE=edge">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=2">
+<meta name="theme-color" content="#222">
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<link rel="stylesheet" href="/lib/font-awesome/css/font-awesome.min.css?v=4.6.2">
+
+<link rel="stylesheet" href="/css/main.css?v=7.1.1">
+
+
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon-next.png?v=7.1.1">
+
+
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32x32-next.png?v=7.1.1">
+
+
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/favicon-16x16-next.png?v=7.1.1">
+
+
+  <link rel="mask-icon" href="/images/logo.svg?v=7.1.1" color="#222">
+
+
+
+
+
+
+
+<script id="hexo.configurations">
+  var NexT = window.NexT || {};
+  var CONFIG = {
+    root: '/',
+    scheme: 'Pisces',
+    version: '7.1.1',
+    sidebar: {"position":"left","display":"post","offset":12,"onmobile":false,"dimmer":false},
+    back2top: true,
+    back2top_sidebar: true,
+    fancybox: false,
+    fastclick: false,
+    lazyload: false,
+    tabs: true,
+    motion: {"enable":true,"async":false,"transition":{"post_block":"fadeIn","post_header":"slideDownIn","post_body":"slideDownIn","coll_header":"slideLeftIn","sidebar":"slideUpIn"}},
+    algolia: {
+      applicationID: '',
+      apiKey: '',
+      indexName: '',
+      hits: {"per_page":10},
+      labels: {"input_placeholder":"Search for Posts","hits_empty":"We didn't find any results for the search: ${query}","hits_stats":"${hits} results found in ${time} ms"}
+    }
+  };
+</script>
+
+
+  
+
+
+
+
+  <meta name="description" content="本文基于0.58.5分析React Native Reconciliation过程  Components、Elements和Instances讲Virtual DOM之前，先讲下React Native几个核心概念和这样设计的目的。在面向对象的UI开发时，要渲染一个UI时，都要自己创建UI对象，并且管理对象引用，例如iOS上要渲染一个UIView： 1234UIView *view= [UIV">
+<meta name="keywords" content="iOS,React Native">
+<meta property="og:type" content="article">
+<meta property="og:title" content="React Native源码分析——Virtual DOM">
+<meta property="og:url" content="http://yoursite.com/2019/05/13/React-Native源码分析——Virtual-DOM/index.html">
+<meta property="og:site_name" content="Alex&#39;s Blog">
+<meta property="og:description" content="本文基于0.58.5分析React Native Reconciliation过程  Components、Elements和Instances讲Virtual DOM之前，先讲下React Native几个核心概念和这样设计的目的。在面向对象的UI开发时，要渲染一个UI时，都要自己创建UI对象，并且管理对象引用，例如iOS上要渲染一个UIView： 1234UIView *view= [UIV">
+<meta property="og:locale" content="default">
+<meta property="og:image" content="https://upload-images.jianshu.io/upload_images/1368199-daac121a1cce22b5.png?imageMogr2/auto-orient/strip%7CimageView2/2/w/1240">
+<meta property="og:image" content="https://upload-images.jianshu.io/upload_images/1368199-ccb88914ff8a96a3.png?imageMogr2/auto-orient/strip%7CimageView2/2/w/1240">
+<meta property="og:image" content="https://upload-images.jianshu.io/upload_images/1368199-a1efa390cd9f5c3d.jpg?imageMogr2/auto-orient/strip%7CimageView2/2/w/1240">
+<meta property="og:image" content="https://upload-images.jianshu.io/upload_images/1368199-d428d051d135d0a9.jpg?imageMogr2/auto-orient/strip%7CimageView2/2/w/1240">
+<meta property="og:updated_time" content="2019-05-13T13:20:42.672Z">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:title" content="React Native源码分析——Virtual DOM">
+<meta name="twitter:description" content="本文基于0.58.5分析React Native Reconciliation过程  Components、Elements和Instances讲Virtual DOM之前，先讲下React Native几个核心概念和这样设计的目的。在面向对象的UI开发时，要渲染一个UI时，都要自己创建UI对象，并且管理对象引用，例如iOS上要渲染一个UIView： 1234UIView *view= [UIV">
+<meta name="twitter:image" content="https://upload-images.jianshu.io/upload_images/1368199-daac121a1cce22b5.png?imageMogr2/auto-orient/strip%7CimageView2/2/w/1240">
+
+
+
+
+
+  
+  
+  <link rel="canonical" href="http://yoursite.com/2019/05/13/React-Native源码分析——Virtual-DOM/">
+
+
+
+<script id="page.configurations">
+  CONFIG.page = {
+    sidebar: "",
+  };
+</script>
+
+  <title>React Native源码分析——Virtual DOM | Alex's Blog</title>
+  
+
+
+
+
+
+
+
+
+
+
+
+
+  <noscript>
+  <style>
+  .use-motion .motion-element,
+  .use-motion .brand,
+  .use-motion .menu-item,
+  .sidebar-inner,
+  .use-motion .post-block,
+  .use-motion .pagination,
+  .use-motion .comments,
+  .use-motion .post-header,
+  .use-motion .post-body,
+  .use-motion .collection-title { opacity: initial; }
+
+  .use-motion .logo,
+  .use-motion .site-title,
+  .use-motion .site-subtitle {
+    opacity: initial;
+    top: initial;
+  }
+
+  .use-motion .logo-line-before i { left: initial; }
+  .use-motion .logo-line-after i { right: initial; }
+  </style>
+</noscript>
+
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage" lang="default">
+
+  
+  
+    
+  
+
+  <div class="container sidebar-position-left page-post-detail">
+    <div class="headband"></div>
+
+    <header id="header" class="header" itemscope itemtype="http://schema.org/WPHeader">
+      <div class="header-inner"><div class="site-brand-wrapper">
+  <div class="site-meta">
+    
+
+    <div class="custom-logo-site-title">
+      <a href="/" class="brand" rel="start">
+        <span class="logo-line-before"><i></i></span>
+        <span class="site-title">Alex's Blog</span>
+        <span class="logo-line-after"><i></i></span>
+      </a>
+    </div>
+    
+      
+        <p class="site-subtitle">起风了，唯有努力生存</p>
+      
+    
+    
+  </div>
+
+  <div class="site-nav-toggle">
+    <button aria-label="Toggle navigation bar">
+      <span class="btn-bar"></span>
+      <span class="btn-bar"></span>
+      <span class="btn-bar"></span>
+    </button>
+  </div>
+</div>
+
+
+
+<nav class="site-nav">
+  
+    <ul id="menu" class="menu">
+      
+        
+        
+        
+          
+          <li class="menu-item menu-item-home">
+
+    
+    
+    
+      
+    
+
+    
+
+    <a href="/" rel="section"><i class="menu-item-icon fa fa-fw fa-home"></i> <br>Home</a>
+
+  </li>
+        
+        
+        
+          
+          <li class="menu-item menu-item-about">
+
+    
+    
+    
+      
+    
+
+    
+
+    <a href="/about/" rel="section"><i class="menu-item-icon fa fa-fw fa-user"></i> <br>About</a>
+
+  </li>
+        
+        
+        
+          
+          <li class="menu-item menu-item-tags">
+
+    
+    
+    
+      
+    
+
+    
+
+    <a href="/tags/" rel="section"><i class="menu-item-icon fa fa-fw fa-tags"></i> <br>Tags</a>
+
+  </li>
+        
+        
+        
+          
+          <li class="menu-item menu-item-categories">
+
+    
+    
+    
+      
+    
+
+    
+
+    <a href="/categories/" rel="section"><i class="menu-item-icon fa fa-fw fa-th"></i> <br>Categories</a>
+
+  </li>
+        
+        
+        
+          
+          <li class="menu-item menu-item-archives">
+
+    
+    
+    
+      
+    
+
+    
+
+    <a href="/archives/" rel="section"><i class="menu-item-icon fa fa-fw fa-archive"></i> <br>Archives</a>
+
+  </li>
+
+      
+      
+    </ul>
+  
+
+  
+
+  
+</nav>
+
+
+
+  
+
+
+
+</div>
+    </header>
+
+    
+
+
+    <main id="main" class="main">
+      <div class="main-inner">
+        <div class="content-wrap">
+          
+            
+
+          
+          <div id="content" class="content">
+            
+
+  <div id="posts" class="posts-expand">
+    
+
+  
+
+  
+  
+  
+
+  
+
+  <article class="post post-type-normal" itemscope itemtype="http://schema.org/Article">
+  
+  
+  
+  <div class="post-block">
+    <link itemprop="mainEntityOfPage" href="http://yoursite.com/2019/05/13/React-Native源码分析——Virtual-DOM/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="name" content="Alex Ting">
+      <meta itemprop="description" content="守护心中的那一亩田">
+      <meta itemprop="image" content="/images/avatar.gif">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Alex's Blog">
+    </span>
+
+    
+      <header class="post-header">
+
+        
+        
+          <h1 class="post-title" itemprop="name headline">React Native源码分析——Virtual DOM
+
+              
+            
+          </h1>
+        
+
+        <div class="post-meta">
+          <span class="post-time">
+
+            
+            
+            
+
+            
+              <span class="post-meta-item-icon">
+                <i class="fa fa-calendar-o"></i>
+              </span>
+              
+                <span class="post-meta-item-text">Posted on</span>
+              
+
+              
+                
+              
+
+              <time title="Created: 2019-05-13 21:20:00 / Modified: 21:20:42" itemprop="dateCreated datePublished" datetime="2019-05-13T21:20:00+08:00">2019-05-13</time>
+            
+
+            
+              
+
+              
+            
+          </span>
+
+          
+            <span class="post-category">
+            
+              <span class="post-meta-divider">|</span>
+            
+              <span class="post-meta-item-icon">
+                <i class="fa fa-folder-o"></i>
+              </span>
+              
+                <span class="post-meta-item-text">In</span>
+              
+              
+                <span itemprop="about" itemscope itemtype="http://schema.org/Thing"><a href="/categories/React-Native/" itemprop="url" rel="index"><span itemprop="name">React Native</span></a></span>
+
+                
+                
+              
+            </span>
+          
+
+          
+            
+            
+          
+
+          
+          
+
+          
+
+          
+
+          
+
+        </div>
+      </header>
+    
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+      
+
+      
+        <blockquote>
+<p>本文基于0.58.5分析React Native Reconciliation过程</p>
+</blockquote>
+<h1 id="Components、Elements和Instances"><a href="#Components、Elements和Instances" class="headerlink" title="Components、Elements和Instances"></a>Components、Elements和Instances</h1><p>讲Virtual DOM之前，先讲下React Native几个核心概念和这样设计的目的。在面向对象的UI开发时，要渲染一个UI时，都要自己创建UI对象，并且管理对象引用，例如iOS上要渲染一个UIView：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">UIView *view= [UIView new];</span><br><span class="line">UILabel *label= [UILabel new];</span><br><span class="line">label.text = @&quot;test&quot;;</span><br><span class="line">[view addSubview:label];</span><br></pre></td></tr></table></figure>
+<p>这种设计模式带来的问题是开发者必须自己创建、更新UI对象，当UI复杂时，维护成本会急剧增加。<br>React使用一种非常巧妙的设计模式来解决上面问题，UI开发时，只需要描述UI界面，引擎会根据描述自动创建具体的实例，在更新时也只需更新UI界面描述。这样开发者就从复杂的UI对象创建、更新中解放出来，开发者只需要关注UI长怎样和核心逻辑，React帮你搞定对象创建和维护，React通过Components、Elements和Instances来实现这种模式。</p>
+<h4 id="Elements"><a href="#Elements" class="headerlink" title="Elements"></a>Elements</h4><p>Element是用来描述UI的js对象，Element只有type和props两个属性，Element创建成本很低，一旦创建就不可变，Component更新到时候会创建新的Element。Element可以嵌套，React会递归解析Element直到叶子结点，这样就得到一颗Element树，这颗树就是Virtual DOM树，React通过diff等算法后把Virtual DOM渲染到屏幕，渲染过程做了很多优化。可以通过render()或者其他方法返回Element，例如：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line">render() &#123;</span><br><span class="line">  return(</span><br><span class="line">    &lt;View style = &#123;&#123;height:200,backgroundColor:&apos;#999999&apos;&#125;&#125;&gt;</span><br><span class="line">      &lt;Text&gt; test &lt;/Text&gt;</span><br><span class="line">   &lt;/View&gt;</span><br><span class="line">  )</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>上述JSX语法最终会转换成以下Element：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br></pre></td><td class="code"><pre><span class="line">&#123;</span><br><span class="line">  type:View,</span><br><span class="line">  props: &#123;</span><br><span class="line">    style:&#123;height:200,backgroundColor:&apos;#999999&apos;&#125;,</span><br><span class="line">    children: &#123;</span><br><span class="line">      type:Text,</span><br><span class="line">      props: &#123;</span><br><span class="line">        children:&apos;test&apos;</span><br><span class="line">      &#125;</span><br><span class="line">    &#125;</span><br><span class="line">  &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<h4 id="Components"><a href="#Components" class="headerlink" title="Components"></a>Components</h4><p>Component是生成Element的对象，可以是个class，也可以是简单的方法。当Component是class的时候，可以存储state和其他属性，实现复杂的逻辑；当Component是方法的时候，是不可变的Component，相当于只有render()方法的class Component。</p>
+<h4 id="Instances"><a href="#Instances" class="headerlink" title="Instances"></a>Instances</h4><p>Instance就是Component 实例，React Native开发过程不用自己管理Instance，React引擎自动创建并维护Instance，具体创建逻辑下文详细介绍。</p>
+<h1 id="Virtual-DOM"><a href="#Virtual-DOM" class="headerlink" title="Virtual DOM"></a>Virtual DOM</h1><p>通常所说的<em><a href="https://reactjs.org/docs/faq-internals.html" target="_blank" rel="noopener">Virtual DOM</a></em>是指相对于<em>Real DOM</em>的element树，Virtual DOM是最初React版本的说法，最开始React只是用在前端，引入Virtual DOM的概念是为了提升UI渲染性能，在UI变化的时候可以先比较Virtual DOM，只更新有变化的Real DOM。</p>
+<h1 id="Reconciliation"><a href="#Reconciliation" class="headerlink" title="Reconciliation"></a>Reconciliation</h1><p>React之所以有这么好的渲染性能，主要是因为在UI变化的时候可以先比较Virtual DOM，只更新有变化的Real DOM，整个更新过程叫<em><a href="https://reactjs.org/docs/reconciliation.html" target="_blank" rel="noopener">Reconciliation</a></em>。</p>
+<h4 id="Fiber"><a href="#Fiber" class="headerlink" title="Fiber"></a>Fiber</h4><p>React 16重构了Reconciliation 实现，新框架叫<strong>Fiber</strong>，Facebook团结花了两年时间实现Fiber，核心优化就是使用<em>Vitual Stack</em>的概念。Fiber之前更新UI的时候是通过同步递归的方式遍历Virtual DOM树，整个过程是同步的，并且在遍历结束之前无法中断，这样在动画的时候就可能导致卡顿。Fiber使用<em>Vitual Stack</em>的概念，把同步递归操作分解成一个个异步、可中断的操作单元，从而解决卡顿问题，并且随时可以取消不需要的操作。</p>
+<h4 id="UI更新"><a href="#UI更新" class="headerlink" title="UI更新"></a>UI更新</h4><p>React Native UI更新主要可以分为以下两个阶段：</p>
+<ul>
+<li>Render</li>
+<li>Commit</li>
+</ul>
+<p>Render过程计算新的element树，render()方法在这个阶段调用的；Commit过程调用diff算法，更新实际发生变化的UI。<br>Render 阶段核心方法调用顺序：</p>
+<ul>
+<li>componentWillReceiveProps</li>
+<li>getDerivedStateFromProps</li>
+<li>shouldComponentUpdate</li>
+<li>componentWillUpdate</li>
+<li>render()</li>
+<li>reconcileChildren()</li>
+</ul>
+<p>Commit 阶段核心方法调用顺序：</p>
+<ul>
+<li>getSnapshotBeforeUpdate</li>
+<li>diff</li>
+<li>updateView</li>
+<li>componentDidUpdate</li>
+</ul>
+<p><em>componentWillReceiveProps和componentWillUpdate已经废弃，不推荐使用了，使用getDerivedStateFromProps和getSnapshotBeforeUpdate代替</em><br><strong>updateView</strong>方法调用RCTUIManager.updateView更新Native View。</p>
+<h1 id="Reconciliation源码分析"><a href="#Reconciliation源码分析" class="headerlink" title="Reconciliation源码分析"></a>Reconciliation源码分析</h1><p>接下来以<a href="https://reactnative.cn/docs/state/" target="_blank" rel="noopener"><strong>setState</strong></a>方法为切入点分析，分析React Native Reconciliation过程，主要分析UI更新过程，并不深入Fiber细节。</p>
+<h4 id="setState"><a href="#setState" class="headerlink" title="setState"></a>setState</h4><figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line">  _callback() &#123;</span><br><span class="line">    console.log(&apos;callback&apos;);</span><br><span class="line">  &#125;</span><br><span class="line"></span><br><span class="line">  _onPress1() &#123;</span><br><span class="line">      this.setState(previousState =&gt; (</span><br><span class="line">          &#123; value:  previousState.value+1&#125;</span><br><span class="line">        ), this._callback.bind(this));</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>上面代码是React Native上更新UI的最常用方法，我们知道setState是异步调用的，<strong>但state是什么时机更新？callback又什么时机调用呢？又是怎么触发Virtual DOM树和UI更新的呢？</strong></p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">//react.development.js:333</span><br><span class="line">Component.prototype.setState = function (partialState, callback) &#123;</span><br><span class="line">  !(typeof partialState === &apos;object&apos; || typeof partialState === &apos;function&apos; || partialState == null) ? invariant(false, &apos;setState(...): takes an object of state variables to update or a function which returns an object of state variables.&apos;) : void 0;</span><br><span class="line">  this.updater.enqueueSetState(this, partialState, callback, &apos;setState&apos;);</span><br><span class="line">&#125;;</span><br></pre></td></tr></table></figure>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br></pre></td><td class="code"><pre><span class="line">//ReactNativeRender-dev.js:8456</span><br><span class="line">var classComponentUpdater = &#123;</span><br><span class="line">  isMounted: isMounted,</span><br><span class="line">  enqueueSetState: function(inst, payload, callback) &#123;</span><br><span class="line">    var fiber = get$1(inst);</span><br><span class="line">    var currentTime = requestCurrentTime();</span><br><span class="line">    var expirationTime = computeExpirationForFiber(currentTime, fiber);</span><br><span class="line"></span><br><span class="line">    var update = createUpdate(expirationTime);</span><br><span class="line">    update.payload = payload;</span><br><span class="line">    if (callback !== undefined &amp;&amp; callback !== null) &#123;</span><br><span class="line">      &#123;</span><br><span class="line">        warnOnInvalidCallback(callback, &quot;setState&quot;);</span><br><span class="line">      &#125;</span><br><span class="line">      update.callback = callback;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    flushPassiveEffects();</span><br><span class="line">    enqueueUpdate(fiber, update);</span><br><span class="line">    scheduleWork(fiber, expirationTime);</span><br><span class="line">  &#125;</span><br><span class="line">  ...</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>React可以用在Web、Node、React Native，底层updater指向具体实现，React Native上就是classComponentUpdater。<br>可以看到setState最终会创建一个update结构，其中payload就是更新state的匿名方法，然后插入队列，payload和callback将在后面异步执行。</p>
+<h4 id="element树更新"><a href="#element树更新" class="headerlink" title="element树更新"></a>element树更新</h4><p>前文说过Render过程计算新的element树，render()方法在这个阶段调用的，先看一下函数调用栈：</p>
+<p><img src="https://upload-images.jianshu.io/upload_images/1368199-daac121a1cce22b5.png?imageMogr2/auto-orient/strip%7CimageView2/2/w/1240" alt="Render阶段函数调用栈"></p>
+<p>通过函数名可以猜测更新过程会把异步处理批量更新，这样可以提高性能，接下来分析Render过程核心方法。</p>
+<h4 id="performWorkOnRoot"><a href="#performWorkOnRoot" class="headerlink" title="performWorkOnRoot"></a>performWorkOnRoot</h4><figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br></pre></td><td class="code"><pre><span class="line">//ReactNativeRender-dev.js:17168</span><br><span class="line">function performWorkOnRoot(root, expirationTime, isYieldy) &#123;</span><br><span class="line">  // Check if this is async work or sync/expired work.</span><br><span class="line">  if (!isYieldy) &#123;</span><br><span class="line">    // Flush work without yielding.</span><br><span class="line">    // TODO: Non-yieldy work does not necessarily imply expired work. A renderer</span><br><span class="line">    // may want to perform some work without yielding, but also without</span><br><span class="line">    // requiring the root to complete (by triggering placeholders).</span><br><span class="line"></span><br><span class="line">    var finishedWork = root.finishedWork;</span><br><span class="line">    if (finishedWork !== null) &#123;</span><br><span class="line">      // This root is already complete. We can commit it.</span><br><span class="line">      completeRoot(root, finishedWork, expirationTime);</span><br><span class="line">    &#125; else &#123;</span><br><span class="line">      root.finishedWork = null;</span><br><span class="line">      // If this root previously suspended, clear its existing timeout, since</span><br><span class="line">      // we&apos;re about to try rendering again.</span><br><span class="line">      var timeoutHandle = root.timeoutHandle;</span><br><span class="line">      if (timeoutHandle !== noTimeout) &#123;</span><br><span class="line">        root.timeoutHandle = noTimeout;</span><br><span class="line">        // $FlowFixMe Complains noTimeout is not a TimeoutID, despite the check above</span><br><span class="line">        cancelTimeout(timeoutHandle);</span><br><span class="line">      &#125;</span><br><span class="line">      renderRoot(root, isYieldy);</span><br><span class="line">      finishedWork = root.finishedWork;</span><br><span class="line">      if (finishedWork !== null) &#123;</span><br><span class="line">        // We&apos;ve completed the root. Commit it.</span><br><span class="line">        completeRoot(root, finishedWork, expirationTime);</span><br><span class="line">      &#125;</span><br><span class="line">    &#125;</span><br><span class="line">  &#125;</span><br><span class="line">  ...</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>performWorkOnRoot是UI更新的入口方法，React Native上isYieldy直接传的false。<em>每次更新的时候都会从最顶端的节点开始计算新的element树，不管是哪个节点调的setState，但没变化的节点并不会重新计算，而是直接重用。但如果父节点发生变化，则所有字节的都会进行重新计算，而不管子节点是否变化，除非子节点shouldComponentUpdate返回false，或者子节点是PureReactComponent。</em><br><strong>renderRoot</strong>就是Render阶段入口方法，<strong>completeRoot</strong>则是Commit阶段入口方法。</p>
+<h4 id="workLoop"><a href="#workLoop" class="headerlink" title="workLoop"></a>workLoop</h4><figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br></pre></td><td class="code"><pre><span class="line">//ReactNativeRender-dev.js:16111</span><br><span class="line">function workLoop(isYieldy) &#123;</span><br><span class="line">  if (!isYieldy) &#123;</span><br><span class="line">    // Flush work without yielding</span><br><span class="line">    while (nextUnitOfWork !== null) &#123;</span><br><span class="line">      nextUnitOfWork = performUnitOfWork(nextUnitOfWork);</span><br><span class="line">    &#125;</span><br><span class="line">  &#125; else &#123;</span><br><span class="line">    // Flush asynchronous work until there&apos;s a higher priority event</span><br><span class="line">    while (nextUnitOfWork !== null &amp;&amp; !shouldYieldToRenderer()) &#123;</span><br><span class="line">      nextUnitOfWork = performUnitOfWork(nextUnitOfWork);</span><br><span class="line">    &#125;</span><br><span class="line">  &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>workLoop方法就是遍历整颗element树，React 16重构了Reconciliation 实现，新框架叫Fiber，Fiber使用<em>Vitual Stack</em>的概念，把同步递归操作分解成一个个异步、可中断的操作单元，每个操作单元就是一个节点计算过程。<br>performUnitOfWork就是具体节点计算，每次执行完会通过深度优先返回下一个需要执行的节点，这样就可以遍历整个节点树了。</p>
+<h4 id="performUnitOfWork"><a href="#performUnitOfWork" class="headerlink" title="performUnitOfWork"></a>performUnitOfWork</h4><figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br></pre></td><td class="code"><pre><span class="line">//ReactNativeRender-dev.js:16049</span><br><span class="line">function performUnitOfWork(workInProgress) &#123;</span><br><span class="line">  // The current, flushed, state of this fiber is the alternate.</span><br><span class="line">  // Ideally nothing should rely on this, but relying on it here</span><br><span class="line">  // means that we don&apos;t need an additional field on the work in</span><br><span class="line">  // progress.</span><br><span class="line">  var current$$1 = workInProgress.alternate;</span><br><span class="line">...</span><br><span class="line">  var next = void 0;</span><br><span class="line">  if (enableProfilerTimer) &#123;</span><br><span class="line">    if (workInProgress.mode &amp; ProfileMode) &#123;</span><br><span class="line">      startProfilerTimer(workInProgress);</span><br><span class="line">    &#125;</span><br><span class="line">    next = beginWork(current$$1, workInProgress, nextRenderExpirationTime);</span><br><span class="line">    workInProgress.memoizedProps = workInProgress.pendingProps;</span><br><span class="line">...</span><br><span class="line">  if (next === null) &#123;</span><br><span class="line">    // If this doesn&apos;t spawn new work, complete the current work.</span><br><span class="line">    next = completeUnitOfWork(workInProgress);</span><br><span class="line">  &#125;</span><br><span class="line">  ReactCurrentOwner$2.current = null;</span><br><span class="line">  return next;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>performUnitOfWork主要就是调用beginWork方法，然后更新props。</p>
+<h5 id="beginWork"><a href="#beginWork" class="headerlink" title="beginWork"></a>beginWork</h5><figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br></pre></td><td class="code"><pre><span class="line">//ReactNativeRender-dev.js:12601</span><br><span class="line">function beginWork(current$$1, workInProgress, renderExpirationTime) &#123;</span><br><span class="line">  var updateExpirationTime = workInProgress.expirationTime;</span><br><span class="line"></span><br><span class="line">  if (current$$1 !== null) &#123;</span><br><span class="line">    var oldProps = current$$1.memoizedProps;</span><br><span class="line">    var newProps = workInProgress.pendingProps;</span><br><span class="line">    if (</span><br><span class="line">      oldProps === newProps &amp;&amp;</span><br><span class="line">      !hasContextChanged() &amp;&amp;</span><br><span class="line">      updateExpirationTime &lt; renderExpirationTime</span><br><span class="line">    ) &#123;</span><br><span class="line">      // This fiber does not have any pending work. Bailout without entering</span><br><span class="line">      // the begin phase. There&apos;s still some bookkeeping we that needs to be done</span><br><span class="line">      // in this optimized path, mostly pushing stuff onto the stack.</span><br><span class="line">      switch (workInProgress.tag) &#123;</span><br><span class="line">        ...</span><br><span class="line">        case ClassComponent: &#123;</span><br><span class="line">          var Component = workInProgress.type;</span><br><span class="line">          if (isContextProvider(Component)) &#123;</span><br><span class="line">            pushContextProvider(workInProgress);</span><br><span class="line">          &#125;</span><br><span class="line">          break;</span><br><span class="line">        &#125;</span><br><span class="line">        ...</span><br><span class="line">      return bailoutOnAlreadyFinishedWork(</span><br><span class="line">        current$$1,</span><br><span class="line">        workInProgress,</span><br><span class="line">        renderExpirationTime</span><br><span class="line">      );</span><br><span class="line">    &#125;</span><br><span class="line">  &#125;</span><br><span class="line"></span><br><span class="line">  // Before entering the begin phase, clear the expiration time.</span><br><span class="line">  workInProgress.expirationTime = NoWork;</span><br><span class="line"></span><br><span class="line">  switch (workInProgress.tag) &#123;</span><br><span class="line">    ...</span><br><span class="line">    case ClassComponent: &#123;</span><br><span class="line">      var _Component2 = workInProgress.type;</span><br><span class="line">      var _unresolvedProps = workInProgress.pendingProps;</span><br><span class="line">      var _resolvedProps =</span><br><span class="line">        workInProgress.elementType === _Component2</span><br><span class="line">          ? _unresolvedProps</span><br><span class="line">          : resolveDefaultProps(_Component2, _unresolvedProps);</span><br><span class="line">      return updateClassComponent(</span><br><span class="line">        current$$1,</span><br><span class="line">        workInProgress,</span><br><span class="line">        _Component2,</span><br><span class="line">        _resolvedProps,</span><br><span class="line">        renderExpirationTime</span><br><span class="line">      );</span><br><span class="line">    &#125;</span><br><span class="line">    ...</span><br><span class="line">  &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>可以看到beginWork主要是两个分支，每个分支都是一个很大switch case语句，第一个分支处理节点没变化的情况，这个时候不会进行计算，第二个分支处理节点发生变化的情况。每个switch case处理不同类型的节点，这里只分析ClassComponent类型。<br>最终会调用updateClassComponent方法更新发生变化的节点。</p>
+<h4 id="updateClassComponent"><a href="#updateClassComponent" class="headerlink" title="updateClassComponent"></a>updateClassComponent</h4><figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br><span class="line">60</span><br><span class="line">61</span><br><span class="line">62</span><br><span class="line">63</span><br><span class="line">64</span><br><span class="line">65</span><br></pre></td><td class="code"><pre><span class="line">//ReactNativeRender-dev.js:11457</span><br><span class="line">function updateClassComponent(</span><br><span class="line">  current$$1,</span><br><span class="line">  workInProgress,</span><br><span class="line">  Component,</span><br><span class="line">  nextProps,</span><br><span class="line">  renderExpirationTime</span><br><span class="line">) &#123;</span><br><span class="line">  &#123;</span><br><span class="line">   ...</span><br><span class="line">  var instance = workInProgress.stateNode;</span><br><span class="line">  var shouldUpdate = void 0;</span><br><span class="line">  if (instance === null) &#123;</span><br><span class="line">    if (current$$1 !== null) &#123;</span><br><span class="line">      // An class component without an instance only mounts if it suspended</span><br><span class="line">      // inside a non- concurrent tree, in an inconsistent state. We want to</span><br><span class="line">      // tree it like a new mount, even though an empty version of it already</span><br><span class="line">      // committed. Disconnect the alternate pointers.</span><br><span class="line">      current$$1.alternate = null;</span><br><span class="line">      workInProgress.alternate = null;</span><br><span class="line">      // Since this is conceptually a new fiber, schedule a Placement effect</span><br><span class="line">      workInProgress.effectTag |= Placement;</span><br><span class="line">    &#125;</span><br><span class="line">    // In the initial pass we might need to construct the instance.</span><br><span class="line">    constructClassInstance(</span><br><span class="line">      workInProgress,</span><br><span class="line">      Component,</span><br><span class="line">      nextProps,</span><br><span class="line">      renderExpirationTime</span><br><span class="line">    );</span><br><span class="line">    mountClassInstance(</span><br><span class="line">      workInProgress,</span><br><span class="line">      Component,</span><br><span class="line">      nextProps,</span><br><span class="line">      renderExpirationTime</span><br><span class="line">    );</span><br><span class="line">    shouldUpdate = true;</span><br><span class="line">  &#125; else if (current$$1 === null) &#123;</span><br><span class="line">    // In a resume, we&apos;ll already have an instance we can reuse.</span><br><span class="line">    shouldUpdate = resumeMountClassInstance(</span><br><span class="line">      workInProgress,</span><br><span class="line">      Component,</span><br><span class="line">      nextProps,</span><br><span class="line">      renderExpirationTime</span><br><span class="line">    );</span><br><span class="line">  &#125; else &#123;</span><br><span class="line">    shouldUpdate = updateClassInstance(</span><br><span class="line">      current$$1,</span><br><span class="line">      workInProgress,</span><br><span class="line">      Component,</span><br><span class="line">      nextProps,</span><br><span class="line">      renderExpirationTime</span><br><span class="line">    );</span><br><span class="line">  &#125;</span><br><span class="line">  var nextUnitOfWork = finishClassComponent(</span><br><span class="line">    current$$1,</span><br><span class="line">    workInProgress,</span><br><span class="line">    Component,</span><br><span class="line">    shouldUpdate,</span><br><span class="line">    hasContext,</span><br><span class="line">    renderExpirationTime</span><br><span class="line">  );</span><br><span class="line"> ...</span><br><span class="line">  return nextUnitOfWork;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>updateClassComponent会判断Component是否实例化，如果没有实例化的话会创建Component实例，这也是前文说的React引擎自动创建Instance的时机，如果已经实例化则调用updateClassInstance更新实例，updateClassInstance会返回该实例是否真正需要更新，并更新props和state。最后会调用finishClassComponent更新element并返回下一个计算单元。</p>
+<h4 id="updateClassInstance"><a href="#updateClassInstance" class="headerlink" title="updateClassInstance"></a>updateClassInstance</h4><figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br><span class="line">60</span><br><span class="line">61</span><br><span class="line">62</span><br><span class="line">63</span><br><span class="line">64</span><br><span class="line">65</span><br><span class="line">66</span><br><span class="line">67</span><br><span class="line">68</span><br><span class="line">69</span><br><span class="line">70</span><br><span class="line">71</span><br><span class="line">72</span><br><span class="line">73</span><br><span class="line">74</span><br><span class="line">75</span><br><span class="line">76</span><br><span class="line">77</span><br><span class="line">78</span><br><span class="line">79</span><br><span class="line">80</span><br><span class="line">81</span><br><span class="line">82</span><br><span class="line">83</span><br><span class="line">84</span><br><span class="line">85</span><br><span class="line">86</span><br><span class="line">87</span><br><span class="line">88</span><br><span class="line">89</span><br><span class="line">90</span><br><span class="line">91</span><br><span class="line">92</span><br><span class="line">93</span><br><span class="line">94</span><br><span class="line">95</span><br><span class="line">96</span><br><span class="line">97</span><br><span class="line">98</span><br><span class="line">99</span><br><span class="line">100</span><br><span class="line">101</span><br><span class="line">102</span><br><span class="line">103</span><br><span class="line">104</span><br><span class="line">105</span><br><span class="line">106</span><br><span class="line">107</span><br><span class="line">108</span><br><span class="line">109</span><br><span class="line">110</span><br><span class="line">111</span><br><span class="line">112</span><br><span class="line">113</span><br><span class="line">114</span><br><span class="line">115</span><br><span class="line">116</span><br><span class="line">117</span><br><span class="line">118</span><br><span class="line">119</span><br><span class="line">120</span><br><span class="line">121</span><br><span class="line">122</span><br><span class="line">123</span><br><span class="line">124</span><br><span class="line">125</span><br><span class="line">126</span><br><span class="line">127</span><br><span class="line">128</span><br><span class="line">129</span><br><span class="line">130</span><br><span class="line">131</span><br><span class="line">132</span><br><span class="line">133</span><br><span class="line">134</span><br><span class="line">135</span><br><span class="line">136</span><br><span class="line">137</span><br><span class="line">138</span><br><span class="line">139</span><br><span class="line">140</span><br><span class="line">141</span><br><span class="line">142</span><br><span class="line">143</span><br><span class="line">144</span><br><span class="line">145</span><br><span class="line">146</span><br><span class="line">147</span><br><span class="line">148</span><br><span class="line">149</span><br><span class="line">150</span><br><span class="line">151</span><br><span class="line">152</span><br><span class="line">153</span><br><span class="line">154</span><br><span class="line">155</span><br><span class="line">156</span><br><span class="line">157</span><br><span class="line">158</span><br><span class="line">159</span><br><span class="line">160</span><br><span class="line">161</span><br><span class="line">162</span><br><span class="line">163</span><br><span class="line">164</span><br><span class="line">165</span><br><span class="line">166</span><br><span class="line">167</span><br><span class="line">168</span><br><span class="line">169</span><br><span class="line">170</span><br><span class="line">171</span><br><span class="line">172</span><br><span class="line">173</span><br><span class="line">174</span><br><span class="line">175</span><br><span class="line">176</span><br></pre></td><td class="code"><pre><span class="line">//ReactNativeRender-dev.js:9282</span><br><span class="line">// Invokes the update life-cycles and returns false if it shouldn&apos;t rerender.</span><br><span class="line">function updateClassInstance(</span><br><span class="line">  current,</span><br><span class="line">  workInProgress,</span><br><span class="line">  ctor,</span><br><span class="line">  newProps,</span><br><span class="line">  renderExpirationTime</span><br><span class="line">) &#123;</span><br><span class="line">  var instance = workInProgress.stateNode;</span><br><span class="line"></span><br><span class="line">  var oldProps = workInProgress.memoizedProps;</span><br><span class="line">  instance.props =</span><br><span class="line">    workInProgress.type === workInProgress.elementType</span><br><span class="line">      ? oldProps</span><br><span class="line">      : resolveDefaultProps(workInProgress.type, oldProps);</span><br><span class="line"></span><br><span class="line">  var oldContext = instance.context;</span><br><span class="line">  var contextType = ctor.contextType;</span><br><span class="line">  var nextContext = void 0;</span><br><span class="line">  if (typeof contextType === &quot;object&quot; &amp;&amp; contextType !== null) &#123;</span><br><span class="line">    nextContext = readContext$1(contextType);</span><br><span class="line">  &#125; else &#123;</span><br><span class="line">    var nextUnmaskedContext = getUnmaskedContext(workInProgress, ctor, true);</span><br><span class="line">    nextContext = getMaskedContext(workInProgress, nextUnmaskedContext);</span><br><span class="line">  &#125;</span><br><span class="line"></span><br><span class="line">  var getDerivedStateFromProps = ctor.getDerivedStateFromProps;</span><br><span class="line">  var hasNewLifecycles =</span><br><span class="line">    typeof getDerivedStateFromProps === &quot;function&quot; ||</span><br><span class="line">    typeof instance.getSnapshotBeforeUpdate === &quot;function&quot;;</span><br><span class="line"></span><br><span class="line">  // Note: During these life-cycles, instance.props/instance.state are what</span><br><span class="line">  // ever the previously attempted to render - not the &quot;current&quot;. However,</span><br><span class="line">  // during componentDidUpdate we pass the &quot;current&quot; props.</span><br><span class="line"></span><br><span class="line">  // In order to support react-lifecycles-compat polyfilled components,</span><br><span class="line">  // Unsafe lifecycles should not be invoked for components using the new APIs.</span><br><span class="line">  if (</span><br><span class="line">    !hasNewLifecycles &amp;&amp;</span><br><span class="line">    (typeof instance.UNSAFE_componentWillReceiveProps === &quot;function&quot; ||</span><br><span class="line">      typeof instance.componentWillReceiveProps === &quot;function&quot;)</span><br><span class="line">  ) &#123;</span><br><span class="line">    if (oldProps !== newProps || oldContext !== nextContext) &#123;</span><br><span class="line">      callComponentWillReceiveProps(</span><br><span class="line">        workInProgress,</span><br><span class="line">        instance,</span><br><span class="line">        newProps,</span><br><span class="line">        nextContext</span><br><span class="line">      );</span><br><span class="line">    &#125;</span><br><span class="line">  &#125;</span><br><span class="line"></span><br><span class="line">  resetHasForceUpdateBeforeProcessing();</span><br><span class="line"></span><br><span class="line">//调用setState匿名方法更新state</span><br><span class="line">  var oldState = workInProgress.memoizedState;</span><br><span class="line">  var newState = (instance.state = oldState);</span><br><span class="line">  var updateQueue = workInProgress.updateQueue;</span><br><span class="line">  if (updateQueue !== null) &#123;</span><br><span class="line">    processUpdateQueue(</span><br><span class="line">      workInProgress,</span><br><span class="line">      updateQueue,</span><br><span class="line">      newProps,</span><br><span class="line">      instance,</span><br><span class="line">      renderExpirationTime</span><br><span class="line">    );</span><br><span class="line">    newState = workInProgress.memoizedState;</span><br><span class="line">  &#125;</span><br><span class="line"></span><br><span class="line">  if (</span><br><span class="line">    oldProps === newProps &amp;&amp;</span><br><span class="line">    oldState === newState &amp;&amp;</span><br><span class="line">    !hasContextChanged() &amp;&amp;</span><br><span class="line">    !checkHasForceUpdateAfterProcessing()</span><br><span class="line">  ) &#123;</span><br><span class="line">    // If an update was already in progress, we should schedule an Update</span><br><span class="line">    // effect even though we&apos;re bailing out, so that cWU/cDU are called.</span><br><span class="line">    if (typeof instance.componentDidUpdate === &quot;function&quot;) &#123;</span><br><span class="line">      if (</span><br><span class="line">        oldProps !== current.memoizedProps ||</span><br><span class="line">        oldState !== current.memoizedState</span><br><span class="line">      ) &#123;</span><br><span class="line">        workInProgress.effectTag |= Update;</span><br><span class="line">      &#125;</span><br><span class="line">    &#125;</span><br><span class="line">    if (typeof instance.getSnapshotBeforeUpdate === &quot;function&quot;) &#123;</span><br><span class="line">      if (</span><br><span class="line">        oldProps !== current.memoizedProps ||</span><br><span class="line">        oldState !== current.memoizedState</span><br><span class="line">      ) &#123;</span><br><span class="line">        workInProgress.effectTag |= Snapshot;</span><br><span class="line">      &#125;</span><br><span class="line">    &#125;</span><br><span class="line">    return false;</span><br><span class="line">  &#125;</span><br><span class="line"></span><br><span class="line">  if (typeof getDerivedStateFromProps === &quot;function&quot;) &#123;</span><br><span class="line">    applyDerivedStateFromProps(</span><br><span class="line">      workInProgress,</span><br><span class="line">      ctor,</span><br><span class="line">      getDerivedStateFromProps,</span><br><span class="line">      newProps</span><br><span class="line">    );</span><br><span class="line">    newState = workInProgress.memoizedState;</span><br><span class="line">  &#125;</span><br><span class="line"></span><br><span class="line">  var shouldUpdate =</span><br><span class="line">    checkHasForceUpdateAfterProcessing() ||</span><br><span class="line">    checkShouldComponentUpdate(</span><br><span class="line">      workInProgress,</span><br><span class="line">      ctor,</span><br><span class="line">      oldProps,</span><br><span class="line">      newProps,</span><br><span class="line">      oldState,</span><br><span class="line">      newState,</span><br><span class="line">      nextContext</span><br><span class="line">    );</span><br><span class="line"></span><br><span class="line">  if (shouldUpdate) &#123;</span><br><span class="line">    // In order to support react-lifecycles-compat polyfilled components,</span><br><span class="line">    // Unsafe lifecycles should not be invoked for components using the new APIs.</span><br><span class="line">    if (</span><br><span class="line">      !hasNewLifecycles &amp;&amp;</span><br><span class="line">      (typeof instance.UNSAFE_componentWillUpdate === &quot;function&quot; ||</span><br><span class="line">        typeof instance.componentWillUpdate === &quot;function&quot;)</span><br><span class="line">    ) &#123;</span><br><span class="line">      startPhaseTimer(workInProgress, &quot;componentWillUpdate&quot;);</span><br><span class="line">      if (typeof instance.componentWillUpdate === &quot;function&quot;) &#123;</span><br><span class="line">        instance.componentWillUpdate(newProps, newState, nextContext);</span><br><span class="line">      &#125;</span><br><span class="line">      if (typeof instance.UNSAFE_componentWillUpdate === &quot;function&quot;) &#123;</span><br><span class="line">        instance.UNSAFE_componentWillUpdate(newProps, newState, nextContext);</span><br><span class="line">      &#125;</span><br><span class="line">      stopPhaseTimer();</span><br><span class="line">    &#125;</span><br><span class="line">    if (typeof instance.componentDidUpdate === &quot;function&quot;) &#123;</span><br><span class="line">      workInProgress.effectTag |= Update;</span><br><span class="line">    &#125;</span><br><span class="line">    if (typeof instance.getSnapshotBeforeUpdate === &quot;function&quot;) &#123;</span><br><span class="line">      workInProgress.effectTag |= Snapshot;</span><br><span class="line">    &#125;</span><br><span class="line">  &#125; else &#123;</span><br><span class="line">    // If an update was already in progress, we should schedule an Update</span><br><span class="line">    // effect even though we&apos;re bailing out, so that cWU/cDU are called.</span><br><span class="line">    if (typeof instance.componentDidUpdate === &quot;function&quot;) &#123;</span><br><span class="line">      if (</span><br><span class="line">        oldProps !== current.memoizedProps ||</span><br><span class="line">        oldState !== current.memoizedState</span><br><span class="line">      ) &#123;</span><br><span class="line">        workInProgress.effectTag |= Update;</span><br><span class="line">      &#125;</span><br><span class="line">    &#125;</span><br><span class="line">    if (typeof instance.getSnapshotBeforeUpdate === &quot;function&quot;) &#123;</span><br><span class="line">      if (</span><br><span class="line">        oldProps !== current.memoizedProps ||</span><br><span class="line">        oldState !== current.memoizedState</span><br><span class="line">      ) &#123;</span><br><span class="line">        workInProgress.effectTag |= Snapshot;</span><br><span class="line">      &#125;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    // If shouldComponentUpdate returned false, we should still update the</span><br><span class="line">    // memoized props/state to indicate that this work can be reused.</span><br><span class="line">    workInProgress.memoizedProps = newProps;</span><br><span class="line">    workInProgress.memoizedState = newState;</span><br><span class="line">  &#125;</span><br><span class="line"></span><br><span class="line">  // Update the existing instance&apos;s state, props, and context pointers even</span><br><span class="line">  // if shouldComponentUpdate returns false.</span><br><span class="line">  instance.props = newProps;</span><br><span class="line">  instance.state = newState;</span><br><span class="line">  instance.context = nextContext;</span><br><span class="line"></span><br><span class="line">  return shouldUpdate;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>updateClassInstance判断节点是否需要跟新，调用以下life-cycles方法：</p>
+<ul>
+<li>componentWillReceiveProps</li>
+<li>getDerivedStateFromProps</li>
+<li>shouldComponentUpdate</li>
+<li>componentWillUpdate</li>
+</ul>
+<p><strong>前文已经知道调用setState时会创建一个update结构，updateClassInstance 会调用processUpdateQueue方法计算新的state，processUpdateQueue方法里面会调用setState传的匿名函数</strong></p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br></pre></td><td class="code"><pre><span class="line">//ReactNativeRender-dev.js:8517</span><br><span class="line">function checkShouldComponentUpdate(</span><br><span class="line">  workInProgress,</span><br><span class="line">  ctor,</span><br><span class="line">  oldProps,</span><br><span class="line">  newProps,</span><br><span class="line">  oldState,</span><br><span class="line">  newState,</span><br><span class="line">  nextContext</span><br><span class="line">) &#123;</span><br><span class="line">  var instance = workInProgress.stateNode;</span><br><span class="line">  if (typeof instance.shouldComponentUpdate === &quot;function&quot;) &#123;</span><br><span class="line">    startPhaseTimer(workInProgress, &quot;shouldComponentUpdate&quot;);</span><br><span class="line">    var shouldUpdate = instance.shouldComponentUpdate(</span><br><span class="line">      newProps,</span><br><span class="line">      newState,</span><br><span class="line">      nextContext</span><br><span class="line">    );</span><br><span class="line">    stopPhaseTimer();</span><br><span class="line">    &#123;</span><br><span class="line">      !(shouldUpdate !== undefined)</span><br><span class="line">        ? warningWithoutStack$1(</span><br><span class="line">            false,</span><br><span class="line">            &quot;%s.shouldComponentUpdate(): Returned undefined instead of a &quot; +</span><br><span class="line">              &quot;boolean value. Make sure to return true or false.&quot;,</span><br><span class="line">            getComponentName(ctor) || &quot;Component&quot;</span><br><span class="line">          )</span><br><span class="line">        : void 0;</span><br><span class="line">    &#125;</span><br><span class="line">    return shouldUpdate;</span><br><span class="line">  &#125;</span><br><span class="line">  if (ctor.prototype &amp;&amp; ctor.prototype.isPureReactComponent) &#123;</span><br><span class="line">    return (</span><br><span class="line">      !shallowEqual(oldProps, newProps) || !shallowEqual(oldState, newState)</span><br><span class="line">    );</span><br><span class="line">  &#125;</span><br><span class="line">  return true;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>updateClassInstance调用checkShouldComponentUpdate判断是否需要更新，checkShouldComponentUpdate实现比较简单，</p>
+<ol>
+<li>如果Component实现shouldComponentUpdate方法，则调用shouldComponentUpdate；</li>
+<li>如果是PureReactComponent，则调用shallowEqual比较props和state是否变化；</li>
+<li>否则返回true</li>
+</ol>
+<p><strong>这里要注意checkShouldComponentUpdate默认返回true，所以只要父节点更新，默认就会更新所有子节点，这就是为什么可以通过shouldComponentUpdate返回false或使用PureReactComponent来提升性能。</strong></p>
+<h4 id="finishClassComponent"><a href="#finishClassComponent" class="headerlink" title="finishClassComponent"></a>finishClassComponent</h4><p>Render阶段最后就是调用finishClassComponent方法计算新的element，并且调用reconcileChildren遍历子节点，具体代码如下：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br></pre></td><td class="code"><pre><span class="line">//ReactNativeRender-dev.js:11562</span><br><span class="line">function finishClassComponent(</span><br><span class="line">  current$$1,</span><br><span class="line">  workInProgress,</span><br><span class="line">  Component,</span><br><span class="line">  shouldUpdate,</span><br><span class="line">  hasContext,</span><br><span class="line">  renderExpirationTime</span><br><span class="line">) &#123;</span><br><span class="line">...</span><br><span class="line">  if (!shouldUpdate &amp;&amp; !didCaptureError) &#123;</span><br><span class="line">    // Context providers should defer to sCU for rendering</span><br><span class="line">    if (hasContext) &#123;</span><br><span class="line">      invalidateContextProvider(workInProgress, Component, false);</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    return bailoutOnAlreadyFinishedWork(</span><br><span class="line">      current$$1,</span><br><span class="line">      workInProgress,</span><br><span class="line">      renderExpirationTime</span><br><span class="line">    );</span><br><span class="line">  &#125;</span><br><span class="line"></span><br><span class="line">  var instance = workInProgress.stateNode;</span><br><span class="line"></span><br><span class="line">  // Rerender</span><br><span class="line">  ReactCurrentOwner$3.current = workInProgress;</span><br><span class="line">  var nextChildren = void 0;</span><br><span class="line">  ...</span><br><span class="line">      setCurrentPhase(&quot;render&quot;);</span><br><span class="line">      nextChildren = instance.render();</span><br><span class="line"> ...</span><br><span class="line">    reconcileChildren(</span><br><span class="line">      current$$1,</span><br><span class="line">      workInProgress,</span><br><span class="line">      nextChildren,</span><br><span class="line">      renderExpirationTime</span><br><span class="line">    );</span><br><span class="line"></span><br><span class="line">  // Memoize state using the values we just used to render.</span><br><span class="line">  // TODO: Restructure so we never read values from the instance.</span><br><span class="line">  workInProgress.memoizedState = instance.state;</span><br><span class="line">  ...</span><br><span class="line">  return workInProgress.child;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>如果shouldUpdate为false，则直接重用现有节点，跟beginWork处理没变化的节点一样。<br>如果shouldUpdate为true，则调用render方法计算新的element，然后调用reconcileChildren遍历子节点。</p>
+<h4 id="completeUnitOfWork"><a href="#completeUnitOfWork" class="headerlink" title="completeUnitOfWork"></a>completeUnitOfWork</h4><p>在遍历到叶子节点后performUnitOfWork会调用completeUnitOfWork</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line">//ReactNativeRender-dev.js:16101</span><br><span class="line">function performUnitOfWork(workInProgress) &#123;</span><br><span class="line">  ...</span><br><span class="line">  if (next === null) &#123;</span><br><span class="line">    // If this doesn&apos;t spawn new work, complete the current work.</span><br><span class="line">    next = completeUnitOfWork(workInProgress);</span><br><span class="line">  &#125;</span><br><span class="line">  ...</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>completeUnitOfWork调用completeWork标记需要更新的节点，如果有兄弟节点则返回兄弟节点，继续遍历兄弟节点，否则标记父节点。</p>
+<h1 id="Commit-阶段源码分析"><a href="#Commit-阶段源码分析" class="headerlink" title="Commit 阶段源码分析"></a>Commit 阶段源码分析</h1><p>前文分析来Render阶段核心方法，Render阶段会生成一颗新的element树，并且生成一个Effect list，Effect list是一个线性列表，包含真正需要更新的操作，Commit 阶段则通过Effect list更新具体的UI，首先看下Commit 阶段的函数调用栈：</p>
+<p><img src="https://upload-images.jianshu.io/upload_images/1368199-ccb88914ff8a96a3.png?imageMogr2/auto-orient/strip%7CimageView2/2/w/1240" alt="Commit阶段函数调用栈"></p>
+<h4 id="commitAllHostEffects"><a href="#commitAllHostEffects" class="headerlink" title="commitAllHostEffects"></a>commitAllHostEffects</h4><figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br><span class="line">60</span><br><span class="line">61</span><br><span class="line">62</span><br><span class="line">63</span><br><span class="line">64</span><br><span class="line">65</span><br><span class="line">66</span><br></pre></td><td class="code"><pre><span class="line">//ReactNativeRender-dev.js:15349</span><br><span class="line">function commitAllHostEffects() &#123;</span><br><span class="line">  while (nextEffect !== null) &#123;</span><br><span class="line">    &#123;</span><br><span class="line">      setCurrentFiber(nextEffect);</span><br><span class="line">    &#125;</span><br><span class="line">    recordEffect();</span><br><span class="line"></span><br><span class="line">    var effectTag = nextEffect.effectTag;</span><br><span class="line"></span><br><span class="line">    if (effectTag &amp; ContentReset) &#123;</span><br><span class="line">      commitResetTextContent(nextEffect);</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    if (effectTag &amp; Ref) &#123;</span><br><span class="line">      var current$$1 = nextEffect.alternate;</span><br><span class="line">      if (current$$1 !== null) &#123;</span><br><span class="line">        commitDetachRef(current$$1);</span><br><span class="line">      &#125;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    // The following switch statement is only concerned about placement,</span><br><span class="line">    // updates, and deletions. To avoid needing to add a case for every</span><br><span class="line">    // possible bitmap value, we remove the secondary effects from the</span><br><span class="line">    // effect tag and switch on that value.</span><br><span class="line">    var primaryEffectTag = effectTag &amp; (Placement | Update | Deletion);</span><br><span class="line">    switch (primaryEffectTag) &#123;</span><br><span class="line">      case Placement: &#123;</span><br><span class="line">        commitPlacement(nextEffect);</span><br><span class="line">        // Clear the &quot;placement&quot; from effect tag so that we know that this is inserted, before</span><br><span class="line">        // any life-cycles like componentDidMount gets called.</span><br><span class="line">        // TODO: findDOMNode doesn&apos;t rely on this any more but isMounted</span><br><span class="line">        // does and isMounted is deprecated anyway so we should be able</span><br><span class="line">        // to kill this.</span><br><span class="line">        nextEffect.effectTag &amp;= ~Placement;</span><br><span class="line">        break;</span><br><span class="line">      &#125;</span><br><span class="line">      case PlacementAndUpdate: &#123;</span><br><span class="line">        // Placement</span><br><span class="line">        commitPlacement(nextEffect);</span><br><span class="line">        // Clear the &quot;placement&quot; from effect tag so that we know that this is inserted, before</span><br><span class="line">        // any life-cycles like componentDidMount gets called.</span><br><span class="line">        nextEffect.effectTag &amp;= ~Placement;</span><br><span class="line"></span><br><span class="line">        // Update</span><br><span class="line">        var _current = nextEffect.alternate;</span><br><span class="line">        commitWork(_current, nextEffect);</span><br><span class="line">        break;</span><br><span class="line">      &#125;</span><br><span class="line">      case Update: &#123;</span><br><span class="line">        var _current2 = nextEffect.alternate;</span><br><span class="line">        commitWork(_current2, nextEffect);</span><br><span class="line">        break;</span><br><span class="line">      &#125;</span><br><span class="line">      case Deletion: &#123;</span><br><span class="line">        commitDeletion(nextEffect);</span><br><span class="line">        break;</span><br><span class="line">      &#125;</span><br><span class="line">    &#125;</span><br><span class="line">    nextEffect = nextEffect.nextEffect;</span><br><span class="line">  &#125;</span><br><span class="line"></span><br><span class="line">  &#123;</span><br><span class="line">    resetCurrentFiber();</span><br><span class="line">  &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>commitAllHostEffects源码比较好理解，循环执行effect操作，effect操作可能是替换、删除、更新等</p>
+<h4 id="commitWork"><a href="#commitWork" class="headerlink" title="commitWork"></a>commitWork</h4><p>更新操作会调用commitWork，源码如下：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br><span class="line">60</span><br><span class="line">61</span><br></pre></td><td class="code"><pre><span class="line">//ReactNativeRender-dev.js:14628</span><br><span class="line">function commitWork(current$$1, finishedWork) &#123;</span><br><span class="line">  ...</span><br><span class="line">  switch (finishedWork.tag) &#123;</span><br><span class="line">    case FunctionComponent:</span><br><span class="line">    case ForwardRef:</span><br><span class="line">    case MemoComponent:</span><br><span class="line">    case SimpleMemoComponent: &#123;</span><br><span class="line">      // Note: We currently never use MountMutation, but useLayout uses</span><br><span class="line">      // UnmountMutation.</span><br><span class="line">      commitHookEffectList(UnmountMutation, MountMutation, finishedWork);</span><br><span class="line">      return;</span><br><span class="line">    &#125;</span><br><span class="line">    case ClassComponent: &#123;</span><br><span class="line">      return;</span><br><span class="line">    &#125;</span><br><span class="line">    case HostComponent: &#123;</span><br><span class="line">      var instance = finishedWork.stateNode;</span><br><span class="line">      if (instance != null) &#123;</span><br><span class="line">        // Commit the work prepared earlier.</span><br><span class="line">        var newProps = finishedWork.memoizedProps;</span><br><span class="line">        // For hydration we reuse the update path but we treat the oldProps</span><br><span class="line">        // as the newProps. The updatePayload will contain the real change in</span><br><span class="line">        // this case.</span><br><span class="line">        var oldProps =</span><br><span class="line">          current$$1 !== null ? current$$1.memoizedProps : newProps;</span><br><span class="line">        var type = finishedWork.type;</span><br><span class="line">        // TODO: Type the updateQueue to be specific to host components.</span><br><span class="line">        var updatePayload = finishedWork.updateQueue;</span><br><span class="line">        finishedWork.updateQueue = null;</span><br><span class="line">        if (updatePayload !== null) &#123;</span><br><span class="line">          commitUpdate(</span><br><span class="line">            instance,</span><br><span class="line">            updatePayload,</span><br><span class="line">            type,</span><br><span class="line">            oldProps,</span><br><span class="line">            newProps,</span><br><span class="line">            finishedWork</span><br><span class="line">          );</span><br><span class="line">        &#125;</span><br><span class="line">      &#125;</span><br><span class="line">      return;</span><br><span class="line">    &#125;</span><br><span class="line">    case HostText: &#123;</span><br><span class="line">      invariant(</span><br><span class="line">        finishedWork.stateNode !== null,</span><br><span class="line">        &quot;This should have a text node initialized. This error is likely &quot; +</span><br><span class="line">          &quot;caused by a bug in React. Please file an issue.&quot;</span><br><span class="line">      );</span><br><span class="line">      var textInstance = finishedWork.stateNode;</span><br><span class="line">      var newText = finishedWork.memoizedProps;</span><br><span class="line">      // For hydration we reuse the update path but we treat the oldProps</span><br><span class="line">      // as the newProps. The updatePayload will contain the real change in</span><br><span class="line">      // this case.</span><br><span class="line">      var oldText = current$$1 !== null ? current$$1.memoizedProps : newText;</span><br><span class="line">      commitTextUpdate(textInstance, oldText, newText);</span><br><span class="line">      return;</span><br><span class="line">    &#125;</span><br><span class="line">    ...</span><br><span class="line">  &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>React Native上Component都是由View、Text等基础Component组成的，所以最终实际更新的是View、Text等基础Component，最后会调用commitUpdate和commitTextUpdate完成实际的更新操作。</p>
+<h4 id="commitUpdate"><a href="#commitUpdate" class="headerlink" title="commitUpdate"></a>commitUpdate</h4><figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br></pre></td><td class="code"><pre><span class="line">//ReactNativeRender-dev.js:4153</span><br><span class="line">function commitUpdate(</span><br><span class="line">  instance,</span><br><span class="line">  updatePayloadTODO,</span><br><span class="line">  type,</span><br><span class="line">  oldProps,</span><br><span class="line">  newProps,</span><br><span class="line">  internalInstanceHandle</span><br><span class="line">) &#123;</span><br><span class="line">  var viewConfig = instance.viewConfig;</span><br><span class="line"></span><br><span class="line">  updateFiberProps(instance._nativeTag, newProps);</span><br><span class="line"></span><br><span class="line">  var updatePayload = diff(oldProps, newProps, viewConfig.validAttributes);</span><br><span class="line"></span><br><span class="line">  // Avoid the overhead of bridge calls if there&apos;s no update.</span><br><span class="line">  // This is an expensive no-op for Android, and causes an unnecessary</span><br><span class="line">  // view invalidation for certain components (eg RCTTextInput) on iOS.</span><br><span class="line">  if (updatePayload != null) &#123;</span><br><span class="line">    UIManager.updateView(</span><br><span class="line">      instance._nativeTag, // reactTag</span><br><span class="line">      viewConfig.uiViewClassName, // viewName</span><br><span class="line">      updatePayload // props</span><br><span class="line">    );</span><br><span class="line">  &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>commitUpdate源码比较好理解，首先调用diff判断是否需要更新，如果需要更新的话调用UIManager.updateView更新Native UI，其中UIManager.updateView是Native 暴露的module。diff方法主要是比较props是否变化：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line">//ReactNativeRender-dev.js:3638</span><br><span class="line">function diff(prevProps, nextProps, validAttributes) &#123;</span><br><span class="line">  return diffProperties(</span><br><span class="line">    null, // updatePayload</span><br><span class="line">    prevProps,</span><br><span class="line">    nextProps,</span><br><span class="line">    validAttributes</span><br><span class="line">  );</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<h4 id="commitTextUpdate"><a href="#commitTextUpdate" class="headerlink" title="commitTextUpdate"></a>commitTextUpdate</h4><figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line">//ReactNativeRender-dev.js:14659</span><br><span class="line">//ReactNativeRender-dev.js:4145</span><br><span class="line">function commitTextUpdate(textInstance, oldText, newText) &#123;</span><br><span class="line">  UIManager.updateView(</span><br><span class="line">    textInstance, // reactTag</span><br><span class="line">    &quot;RCTRawText&quot;, // viewName</span><br><span class="line">    &#123; text: newText &#125; // props</span><br><span class="line">  );</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>commitTextUpdate实现比较简单，因为<strong>completeWork</strong>方法标记TextComponent的时候已经判断了text是否变化，所以直接调用UIManager.updateView。</p>
+<h4 id="life-cycles方法调用"><a href="#life-cycles方法调用" class="headerlink" title="life-cycles方法调用"></a>life-cycles方法调用</h4><p>在更新完UI后将调用componentDidUpdate方法和setState callback方法，具体调用栈如下：<br><img src="https://upload-images.jianshu.io/upload_images/1368199-a1efa390cd9f5c3d.jpg?imageMogr2/auto-orient/strip%7CimageView2/2/w/1240" alt="componentDidUpdate调用栈"></p>
+<p><img src="https://upload-images.jianshu.io/upload_images/1368199-d428d051d135d0a9.jpg?imageMogr2/auto-orient/strip%7CimageView2/2/w/1240" alt="setState callback调用栈"></p>
+<h1 id="总结"><a href="#总结" class="headerlink" title="总结"></a>总结</h1><p>React Native Reconciliation过程比较复杂，Fiber框架把递归操作分解成一个个异步、可中断的操作单元后进一步复杂度。<br>Reconciliation主要可以分为以下两个阶段：</p>
+<ul>
+<li>Render</li>
+<li>Commit</li>
+</ul>
+<p>Render阶段从根节点开始遍历element树，对于不需要更新的节点直接重用fiber node，对于需要更新的节点，调用life-cycle方法，然后调用render方法计算新的element，最后调用reconcileChildren遍历子节点。<br>Render阶段还会标记更新，并且生成一个Effect list，Effect list是一个线性列表，包含真正需要更新的操作。<br>Commit 阶段通过Effect list更新具体的UI，这阶段会调用diff，然后调用UIManager.updateView更新Native View，最后调用componentDidUpdate方法和setState callback方法。</p>
+<p>#引用</p>
+<p><a href="https://medium.com/react-in-depth/inside-fiber-in-depth-overview-of-the-new-reconciliation-algorithm-in-react-e1c04700ef6e" target="_blank" rel="noopener">Inside Fiber: in-depth overview of the new reconciliation algorithm in React</a><br><a href="https://github.com/acdlite/react-fiber-architecture" target="_blank" rel="noopener">React Fiber Architecture</a><br><a href="https://reactjs.org/blog/2015/12/18/react-components-elements-and-instances.html" target="_blank" rel="noopener">React Components, Elements, and Instances</a><br><a href="https://reactjs.org/docs/reconciliation.html" target="_blank" rel="noopener">Reconciliation</a></p>
+
+      
+    </div>
+
+    
+
+    
+    
+    
+
+    
+
+    
+      
+    
+    
+
+    
+
+    <footer class="post-footer">
+      
+        <div class="post-tags">
+          
+            <a href="/tags/iOS/" rel="tag"># iOS</a>
+          
+            <a href="/tags/React-Native/" rel="tag"># React Native</a>
+          
+        </div>
+      
+
+      
+      
+      
+
+      
+        <div class="post-nav">
+          <div class="post-nav-next post-nav-item">
+            
+              <a href="/2019/05/13/objc-msgSend汇编源码分析/" rel="next" title="objc_msgSend汇编源码分析">
+                <i class="fa fa-chevron-left"></i> objc_msgSend汇编源码分析
+              </a>
+            
+          </div>
+
+          <span class="post-nav-divider"></span>
+
+          <div class="post-nav-prev post-nav-item">
+            
+          </div>
+        </div>
+      
+
+      
+      
+    </footer>
+  </div>
+  
+  
+  
+  </article>
+
+
+  </div>
+
+
+          </div>
+          
+
+  
+
+
+
+        </div>
+        
+          
+  
+  <div class="sidebar-toggle">
+    <div class="sidebar-toggle-line-wrap">
+      <span class="sidebar-toggle-line sidebar-toggle-line-first"></span>
+      <span class="sidebar-toggle-line sidebar-toggle-line-middle"></span>
+      <span class="sidebar-toggle-line sidebar-toggle-line-last"></span>
+    </div>
+  </div>
+
+  <aside id="sidebar" class="sidebar">
+    <div class="sidebar-inner">
+
+      
+
+      
+        <ul class="sidebar-nav motion-element">
+          <li class="sidebar-nav-toc sidebar-nav-active" data-target="post-toc-wrap">
+            Table of Contents
+          </li>
+          <li class="sidebar-nav-overview" data-target="site-overview-wrap">
+            Overview
+          </li>
+        </ul>
+      
+
+      <div class="site-overview-wrap sidebar-panel">
+        <div class="site-overview">
+          <div class="site-author motion-element" itemprop="author" itemscope itemtype="http://schema.org/Person">
+            
+              <p class="site-author-name" itemprop="name">Alex Ting</p>
+              <div class="site-description motion-element" itemprop="description">守护心中的那一亩田</div>
+          </div>
+
+          
+            <nav class="site-state motion-element">
+              
+                <div class="site-state-item site-state-posts">
+                
+                  <a href="/archives/">
+                
+                    <span class="site-state-item-count">7</span>
+                    <span class="site-state-item-name">posts</span>
+                  </a>
+                </div>
+              
+
+              
+                
+                
+                <div class="site-state-item site-state-categories">
+                  
+                    
+                      <a href="/categories/">
+                    
+                  
+                    
+                    
+                      
+                    
+                      
+                    
+                    <span class="site-state-item-count">2</span>
+                    <span class="site-state-item-name">categories</span>
+                  </a>
+                </div>
+              
+
+              
+                
+                
+                <div class="site-state-item site-state-tags">
+                  
+                    
+                      <a href="/tags/">
+                    
+                  
+                    
+                    
+                      
+                    
+                      
+                    
+                      
+                    
+                      
+                    
+                    <span class="site-state-item-count">4</span>
+                    <span class="site-state-item-name">tags</span>
+                  </a>
+                </div>
+              
+            </nav>
+          
+
+          
+
+          
+
+          
+            <div class="links-of-author motion-element">
+              
+                <span class="links-of-author-item">
+                  
+                  
+                    
+                  
+                  
+                    
+                  
+                  <a href="https://github.com/yourname" title="GitHub &rarr; https://github.com/yourname" rel="noopener" target="_blank"><i class="fa fa-fw fa-github"></i>GitHub</a>
+                </span>
+              
+                <span class="links-of-author-item">
+                  
+                  
+                    
+                  
+                  
+                    
+                  
+                  <a href="mailto:yourname@gmail.com" title="E-Mail &rarr; mailto:yourname@gmail.com" rel="noopener" target="_blank"><i class="fa fa-fw fa-envelope"></i>E-Mail</a>
+                </span>
+              
+            </div>
+          
+
+          
+
+          
+          
+
+          
+            
+          
+          
+
+        </div>
+      </div>
+
+      
+      <!--noindex-->
+        <div class="post-toc-wrap motion-element sidebar-panel sidebar-panel-active">
+          <div class="post-toc">
+
+            
+            
+            
+            
+
+            
+              <div class="post-toc-content"><ol class="nav"><li class="nav-item nav-level-1"><a class="nav-link" href="#Components、Elements和Instances"><span class="nav-number">1.</span> <span class="nav-text">Components、Elements和Instances</span></a><ol class="nav-child"><li class="nav-item nav-level-4"><a class="nav-link" href="#Elements"><span class="nav-number">1.0.0.1.</span> <span class="nav-text">Elements</span></a></li><li class="nav-item nav-level-4"><a class="nav-link" href="#Components"><span class="nav-number">1.0.0.2.</span> <span class="nav-text">Components</span></a></li><li class="nav-item nav-level-4"><a class="nav-link" href="#Instances"><span class="nav-number">1.0.0.3.</span> <span class="nav-text">Instances</span></a></li></ol></li></ol><li class="nav-item nav-level-1"><a class="nav-link" href="#Virtual-DOM"><span class="nav-number">2.</span> <span class="nav-text">Virtual DOM</span></a></li><li class="nav-item nav-level-1"><a class="nav-link" href="#Reconciliation"><span class="nav-number">3.</span> <span class="nav-text">Reconciliation</span></a><ol class="nav-child"><li class="nav-item nav-level-4"><a class="nav-link" href="#Fiber"><span class="nav-number">3.0.0.1.</span> <span class="nav-text">Fiber</span></a></li><li class="nav-item nav-level-4"><a class="nav-link" href="#UI更新"><span class="nav-number">3.0.0.2.</span> <span class="nav-text">UI更新</span></a></li></ol></li><li class="nav-item nav-level-1"><a class="nav-link" href="#Reconciliation源码分析"><span class="nav-number">4.</span> <span class="nav-text">Reconciliation源码分析</span></a><ol class="nav-child"><li class="nav-item nav-level-4"><a class="nav-link" href="#setState"><span class="nav-number">4.0.0.1.</span> <span class="nav-text">setState</span></a></li><li class="nav-item nav-level-4"><a class="nav-link" href="#element树更新"><span class="nav-number">4.0.0.2.</span> <span class="nav-text">element树更新</span></a></li><li class="nav-item nav-level-4"><a class="nav-link" href="#performWorkOnRoot"><span class="nav-number">4.0.0.3.</span> <span class="nav-text">performWorkOnRoot</span></a></li><li class="nav-item nav-level-4"><a class="nav-link" href="#workLoop"><span class="nav-number">4.0.0.4.</span> <span class="nav-text">workLoop</span></a></li><li class="nav-item nav-level-4"><a class="nav-link" href="#performUnitOfWork"><span class="nav-number">4.0.0.5.</span> <span class="nav-text">performUnitOfWork</span></a><ol class="nav-child"><li class="nav-item nav-level-5"><a class="nav-link" href="#beginWork"><span class="nav-number">4.0.0.5.1.</span> <span class="nav-text">beginWork</span></a></li></ol></li><li class="nav-item nav-level-4"><a class="nav-link" href="#updateClassComponent"><span class="nav-number">4.0.0.6.</span> <span class="nav-text">updateClassComponent</span></a></li><li class="nav-item nav-level-4"><a class="nav-link" href="#updateClassInstance"><span class="nav-number">4.0.0.7.</span> <span class="nav-text">updateClassInstance</span></a></li><li class="nav-item nav-level-4"><a class="nav-link" href="#finishClassComponent"><span class="nav-number">4.0.0.8.</span> <span class="nav-text">finishClassComponent</span></a></li><li class="nav-item nav-level-4"><a class="nav-link" href="#completeUnitOfWork"><span class="nav-number">4.0.0.9.</span> <span class="nav-text">completeUnitOfWork</span></a></li></ol></li><li class="nav-item nav-level-1"><a class="nav-link" href="#Commit-阶段源码分析"><span class="nav-number">5.</span> <span class="nav-text">Commit 阶段源码分析</span></a><ol class="nav-child"><li class="nav-item nav-level-4"><a class="nav-link" href="#commitAllHostEffects"><span class="nav-number">5.0.0.1.</span> <span class="nav-text">commitAllHostEffects</span></a></li><li class="nav-item nav-level-4"><a class="nav-link" href="#commitWork"><span class="nav-number">5.0.0.2.</span> <span class="nav-text">commitWork</span></a></li><li class="nav-item nav-level-4"><a class="nav-link" href="#commitUpdate"><span class="nav-number">5.0.0.3.</span> <span class="nav-text">commitUpdate</span></a></li><li class="nav-item nav-level-4"><a class="nav-link" href="#commitTextUpdate"><span class="nav-number">5.0.0.4.</span> <span class="nav-text">commitTextUpdate</span></a></li><li class="nav-item nav-level-4"><a class="nav-link" href="#life-cycles方法调用"><span class="nav-number">5.0.0.5.</span> <span class="nav-text">life-cycles方法调用</span></a></li></ol></li><li class="nav-item nav-level-1"><a class="nav-link" href="#总结"><span class="nav-number">6.</span> <span class="nav-text">总结</span></a></li></div>
+            
+
+          </div>
+        </div>
+      <!--/noindex-->
+      
+
+      
+        <div class="back-to-top">
+          <i class="fa fa-arrow-up"></i>
+          
+        </div>
+      
+
+    </div>
+  </aside>
+  
+
+
+        
+      </div>
+    </main>
+
+    <footer id="footer" class="footer">
+      <div class="footer-inner">
+        <div class="copyright">&copy; <span itemprop="copyrightYear">2019</span>
+  <span class="with-love" id="animate">
+    <i class="fa fa-user"></i>
+  </span>
+  <span class="author" itemprop="copyrightHolder">Alex Ting</span>
+
+  
+
+  
+</div>
+
+
+  <div class="powered-by">Powered by <a href="https://hexo.io" class="theme-link" rel="noopener" target="_blank">Hexo</a> v3.8.0</div>
+
+
+
+  <span class="post-meta-divider">|</span>
+
+
+
+  <div class="theme-info">Theme – <a href="https://theme-next.org" class="theme-link" rel="noopener" target="_blank">NexT.Pisces</a> v7.1.1</div>
+
+
+
+
+        
+
+
+
+
+
+
+
+
+        
+      </div>
+    </footer>
+
+    
+
+    
+
+    
+
+    
+  </div>
+
+  
+
+<script>
+  if (Object.prototype.toString.call(window.Promise) !== '[object Function]') {
+    window.Promise = null;
+  }
+</script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  
+  <script src="/lib/jquery/index.js?v=2.1.3"></script>
+
+  
+  <script src="/lib/velocity/velocity.min.js?v=1.2.1"></script>
+
+  
+  <script src="/lib/velocity/velocity.ui.min.js?v=1.2.1"></script>
+
+
+  
+
+
+  <script src="/js/utils.js?v=7.1.1"></script>
+
+  <script src="/js/motion.js?v=7.1.1"></script>
+
+
+
+  
+  
+
+
+  <script src="/js/affix.js?v=7.1.1"></script>
+
+  <script src="/js/schemes/pisces.js?v=7.1.1"></script>
+
+
+
+  
+  <script src="/js/scrollspy.js?v=7.1.1"></script>
+<script src="/js/post-details.js?v=7.1.1"></script>
+
+
+
+  
+
+
+  <script src="/js/next-boot.js?v=7.1.1"></script>
+
+
+  
+
+  
+
+  
+
+  
+
+
+  
+
+
+  
+
+
+
+
+  
+
+  
+
+  
+
+  
+
+  
+
+  
+
+  
+
+  
+
+  
+
+  
+
+  
+
+  
+
+  
+
+  
+
+</body>
+</html>

@@ -1,0 +1,909 @@
+<!DOCTYPE html>
+
+
+
+
+
+
+
+
+
+
+
+
+  
+
+
+<html class="theme-next pisces use-motion" lang>
+<head><meta name="generator" content="Hexo 3.8.0">
+  <meta charset="UTF-8">
+<meta http-equiv="X-UA-Compatible" content="IE=edge">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=2">
+<meta name="theme-color" content="#222">
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<link rel="stylesheet" href="/lib/font-awesome/css/font-awesome.min.css?v=4.6.2">
+
+<link rel="stylesheet" href="/css/main.css?v=7.1.1">
+
+
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon-next.png?v=7.1.1">
+
+
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32x32-next.png?v=7.1.1">
+
+
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/favicon-16x16-next.png?v=7.1.1">
+
+
+  <link rel="mask-icon" href="/images/logo.svg?v=7.1.1" color="#222">
+
+
+
+
+
+
+
+<script id="hexo.configurations">
+  var NexT = window.NexT || {};
+  var CONFIG = {
+    root: '/',
+    scheme: 'Pisces',
+    version: '7.1.1',
+    sidebar: {"position":"left","display":"post","offset":12,"onmobile":false,"dimmer":false},
+    back2top: true,
+    back2top_sidebar: true,
+    fancybox: false,
+    fastclick: false,
+    lazyload: false,
+    tabs: true,
+    motion: {"enable":true,"async":false,"transition":{"post_block":"fadeIn","post_header":"slideDownIn","post_body":"slideDownIn","coll_header":"slideLeftIn","sidebar":"slideUpIn"}},
+    algolia: {
+      applicationID: '',
+      apiKey: '',
+      indexName: '',
+      hits: {"per_page":10},
+      labels: {"input_placeholder":"Search for Posts","hits_empty":"We didn't find any results for the search: ${query}","hits_stats":"${hits} results found in ${time} ms"}
+    }
+  };
+</script>
+
+
+  
+
+
+
+
+  <meta name="description" content="引言Objective-C是通过消息机制调用方法的，编译器会把所有消息发送转为objc_msgSend方法调用。说到objc_msgSend的汇编实现，大多数人会觉的是因为性能高才用汇编实现，几乎没有文章说其它原因。Objective-C所有方法都会转为objc_msgSend方法调用，然而每个方法参数和返回值都可能不一样，参数和返回值要怎么处理？  本文首先会结合Objective-C Runt">
+<meta name="keywords" content="iOS">
+<meta property="og:type" content="article">
+<meta property="og:title" content="objc_msgSend汇编源码分析">
+<meta property="og:url" content="http://yoursite.com/2019/05/13/objc-msgSend汇编源码分析/index.html">
+<meta property="og:site_name" content="Alex&#39;s Blog">
+<meta property="og:description" content="引言Objective-C是通过消息机制调用方法的，编译器会把所有消息发送转为objc_msgSend方法调用。说到objc_msgSend的汇编实现，大多数人会觉的是因为性能高才用汇编实现，几乎没有文章说其它原因。Objective-C所有方法都会转为objc_msgSend方法调用，然而每个方法参数和返回值都可能不一样，参数和返回值要怎么处理？  本文首先会结合Objective-C Runt">
+<meta property="og:locale" content="default">
+<meta property="og:image" content="https://upload-images.jianshu.io/upload_images/1368199-e9ed46f42de12566.png?imageMogr2/auto-orient/strip%7CimageView2/2/w/1240">
+<meta property="og:image" content="https://upload-images.jianshu.io/upload_images/1368199-f40079879458fa38.jpg?imageMogr2/auto-orient/strip%7CimageView2/2/w/1240">
+<meta property="og:image" content="https://upload-images.jianshu.io/upload_images/1368199-1318490bd93e4a90.jpg?imageMogr2/auto-orient/strip%7CimageView2/2/w/1240">
+<meta property="og:image" content="https://upload-images.jianshu.io/upload_images/1368199-6b3034fb353a1310.jpg?imageMogr2/auto-orient/strip%7CimageView2/2/w/1240">
+<meta property="og:image" content="https://upload-images.jianshu.io/upload_images/1368199-55ce227b4289cad7.jpg?imageMogr2/auto-orient/strip%7CimageView2/2/w/1240">
+<meta property="og:updated_time" content="2019-05-13T13:19:45.188Z">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:title" content="objc_msgSend汇编源码分析">
+<meta name="twitter:description" content="引言Objective-C是通过消息机制调用方法的，编译器会把所有消息发送转为objc_msgSend方法调用。说到objc_msgSend的汇编实现，大多数人会觉的是因为性能高才用汇编实现，几乎没有文章说其它原因。Objective-C所有方法都会转为objc_msgSend方法调用，然而每个方法参数和返回值都可能不一样，参数和返回值要怎么处理？  本文首先会结合Objective-C Runt">
+<meta name="twitter:image" content="https://upload-images.jianshu.io/upload_images/1368199-e9ed46f42de12566.png?imageMogr2/auto-orient/strip%7CimageView2/2/w/1240">
+
+
+
+
+
+  
+  
+  <link rel="canonical" href="http://yoursite.com/2019/05/13/objc-msgSend汇编源码分析/">
+
+
+
+<script id="page.configurations">
+  CONFIG.page = {
+    sidebar: "",
+  };
+</script>
+
+  <title>objc_msgSend汇编源码分析 | Alex's Blog</title>
+  
+
+
+
+
+
+
+
+
+
+
+
+
+  <noscript>
+  <style>
+  .use-motion .motion-element,
+  .use-motion .brand,
+  .use-motion .menu-item,
+  .sidebar-inner,
+  .use-motion .post-block,
+  .use-motion .pagination,
+  .use-motion .comments,
+  .use-motion .post-header,
+  .use-motion .post-body,
+  .use-motion .collection-title { opacity: initial; }
+
+  .use-motion .logo,
+  .use-motion .site-title,
+  .use-motion .site-subtitle {
+    opacity: initial;
+    top: initial;
+  }
+
+  .use-motion .logo-line-before i { left: initial; }
+  .use-motion .logo-line-after i { right: initial; }
+  </style>
+</noscript>
+
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage" lang="default">
+
+  
+  
+    
+  
+
+  <div class="container sidebar-position-left page-post-detail">
+    <div class="headband"></div>
+
+    <header id="header" class="header" itemscope itemtype="http://schema.org/WPHeader">
+      <div class="header-inner"><div class="site-brand-wrapper">
+  <div class="site-meta">
+    
+
+    <div class="custom-logo-site-title">
+      <a href="/" class="brand" rel="start">
+        <span class="logo-line-before"><i></i></span>
+        <span class="site-title">Alex's Blog</span>
+        <span class="logo-line-after"><i></i></span>
+      </a>
+    </div>
+    
+      
+        <p class="site-subtitle">起风了，唯有努力生存</p>
+      
+    
+    
+  </div>
+
+  <div class="site-nav-toggle">
+    <button aria-label="Toggle navigation bar">
+      <span class="btn-bar"></span>
+      <span class="btn-bar"></span>
+      <span class="btn-bar"></span>
+    </button>
+  </div>
+</div>
+
+
+
+<nav class="site-nav">
+  
+    <ul id="menu" class="menu">
+      
+        
+        
+        
+          
+          <li class="menu-item menu-item-home">
+
+    
+    
+    
+      
+    
+
+    
+
+    <a href="/" rel="section"><i class="menu-item-icon fa fa-fw fa-home"></i> <br>Home</a>
+
+  </li>
+        
+        
+        
+          
+          <li class="menu-item menu-item-about">
+
+    
+    
+    
+      
+    
+
+    
+
+    <a href="/about/" rel="section"><i class="menu-item-icon fa fa-fw fa-user"></i> <br>About</a>
+
+  </li>
+        
+        
+        
+          
+          <li class="menu-item menu-item-tags">
+
+    
+    
+    
+      
+    
+
+    
+
+    <a href="/tags/" rel="section"><i class="menu-item-icon fa fa-fw fa-tags"></i> <br>Tags</a>
+
+  </li>
+        
+        
+        
+          
+          <li class="menu-item menu-item-categories">
+
+    
+    
+    
+      
+    
+
+    
+
+    <a href="/categories/" rel="section"><i class="menu-item-icon fa fa-fw fa-th"></i> <br>Categories</a>
+
+  </li>
+        
+        
+        
+          
+          <li class="menu-item menu-item-archives">
+
+    
+    
+    
+      
+    
+
+    
+
+    <a href="/archives/" rel="section"><i class="menu-item-icon fa fa-fw fa-archive"></i> <br>Archives</a>
+
+  </li>
+
+      
+      
+    </ul>
+  
+
+  
+
+  
+</nav>
+
+
+
+  
+
+
+
+</div>
+    </header>
+
+    
+
+
+    <main id="main" class="main">
+      <div class="main-inner">
+        <div class="content-wrap">
+          
+            
+
+          
+          <div id="content" class="content">
+            
+
+  <div id="posts" class="posts-expand">
+    
+
+  
+
+  
+  
+  
+
+  
+
+  <article class="post post-type-normal" itemscope itemtype="http://schema.org/Article">
+  
+  
+  
+  <div class="post-block">
+    <link itemprop="mainEntityOfPage" href="http://yoursite.com/2019/05/13/objc-msgSend汇编源码分析/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="name" content="Alex Ting">
+      <meta itemprop="description" content="守护心中的那一亩田">
+      <meta itemprop="image" content="/images/avatar.gif">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Alex's Blog">
+    </span>
+
+    
+      <header class="post-header">
+
+        
+        
+          <h1 class="post-title" itemprop="name headline">objc_msgSend汇编源码分析
+
+              
+            
+          </h1>
+        
+
+        <div class="post-meta">
+          <span class="post-time">
+
+            
+            
+            
+
+            
+              <span class="post-meta-item-icon">
+                <i class="fa fa-calendar-o"></i>
+              </span>
+              
+                <span class="post-meta-item-text">Posted on</span>
+              
+
+              
+                
+              
+
+              <time title="Created: 2019-05-13 21:19:00 / Modified: 21:19:45" itemprop="dateCreated datePublished" datetime="2019-05-13T21:19:00+08:00">2019-05-13</time>
+            
+
+            
+              
+
+              
+            
+          </span>
+
+          
+            <span class="post-category">
+            
+              <span class="post-meta-divider">|</span>
+            
+              <span class="post-meta-item-icon">
+                <i class="fa fa-folder-o"></i>
+              </span>
+              
+                <span class="post-meta-item-text">In</span>
+              
+              
+                <span itemprop="about" itemscope itemtype="http://schema.org/Thing"><a href="/categories/iOS/" itemprop="url" rel="index"><span itemprop="name">iOS</span></a></span>
+
+                
+                
+              
+            </span>
+          
+
+          
+            
+            
+          
+
+          
+          
+
+          
+
+          
+
+          
+
+        </div>
+      </header>
+    
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+      
+
+      
+        <h1 id="引言"><a href="#引言" class="headerlink" title="引言"></a>引言</h1><p>Objective-C是通过消息机制调用方法的，编译器会把所有消息发送转为objc_msgSend方法调用。说到objc_msgSend的汇编实现，大多数人会觉的是因为<strong>性能高才用汇编实现</strong>，几乎没有文章说其它原因。<strong>Objective-C所有方法都会转为objc_msgSend方法调用，然而每个方法参数和返回值都可能不一样，参数和返回值要怎么处理？</strong></p>
+<ul>
+<li><strong>本文首先会结合Objective-C Runtime机制深入分析objc_msgSend汇编实现。</strong></li>
+<li><strong>本文最后会从Calling Conventions角度分析objc_msgSend实现，利用Calling Conventions和汇编还可以实现很多黑科技。</strong></li>
+</ul>
+<h1 id="Objective-C对象结构"><a href="#Objective-C对象结构" class="headerlink" title="Objective-C对象结构"></a>Objective-C对象结构</h1><p>Objective-C中消息发送核心数据结构如下：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br><span class="line">60</span><br><span class="line">61</span><br><span class="line">62</span><br><span class="line">63</span><br></pre></td><td class="code"><pre><span class="line">//以下代码均为arm64平台</span><br><span class="line">typedef struct objc_class *Class;</span><br><span class="line">typedef struct objc_object *id;</span><br><span class="line"></span><br><span class="line">struct objc_object &#123;</span><br><span class="line">    isa_t isa;</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line">struct objc_class : objc_object &#123;</span><br><span class="line">    Class superclass;</span><br><span class="line">    cache_t cache;             // formerly cache pointer and vtable</span><br><span class="line">    class_data_bits_t bits;  //class_rw_t*</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line">@interface NSObject &lt;NSObject&gt; &#123;</span><br><span class="line">    Class isa  OBJC_ISA_AVAILABILITY;</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line">union isa_t </span><br><span class="line">&#123;</span><br><span class="line">    Class cls;</span><br><span class="line">    uintptr_t bits;</span><br><span class="line">#   define ISA_MASK        0x0000000ffffffff8ULL</span><br><span class="line">#   define ISA_MAGIC_MASK  0x000003f000000001ULL</span><br><span class="line">#   define ISA_MAGIC_VALUE 0x000001a000000001ULL</span><br><span class="line">    struct &#123;</span><br><span class="line">        uintptr_t nonpointer        : 1;</span><br><span class="line">        uintptr_t has_assoc         : 1;</span><br><span class="line">        uintptr_t has_cxx_dtor      : 1;</span><br><span class="line">        uintptr_t shiftcls          : 33; // MACH_VM_MAX_ADDRESS 0x1000000000</span><br><span class="line">        uintptr_t magic             : 6;</span><br><span class="line">        uintptr_t weakly_referenced : 1;</span><br><span class="line">        uintptr_t deallocating      : 1;</span><br><span class="line">        uintptr_t has_sidetable_rc  : 1;</span><br><span class="line">        uintptr_t extra_rc          : 19;</span><br><span class="line">    &#125;;</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line">struct cache_t &#123;</span><br><span class="line">    struct bucket_t *_buckets;</span><br><span class="line">    mask_t _mask;</span><br><span class="line">    mask_t _occupied;</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line">struct bucket_t &#123;</span><br><span class="line">    cache_key_t _key;//实际上是selector</span><br><span class="line">    IMP _imp; //实际上是函数指针</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line">struct class_rw_t &#123;</span><br><span class="line">    uint32_t flags;</span><br><span class="line">    uint32_t version;</span><br><span class="line">    const class_ro_t *ro;</span><br><span class="line">    method_array_t methods;</span><br><span class="line">    property_array_t properties;</span><br><span class="line">    protocol_array_t protocols;</span><br><span class="line">    Class firstSubclass;</span><br><span class="line">    Class nextSiblingClass;</span><br><span class="line">    char *demangledName;</span><br><span class="line">#if SUPPORT_INDEXED_ISA</span><br><span class="line">    uint32_t index;</span><br><span class="line">#endif</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>NSObject子类的实例都有个isa指针，isa指向Class，Class有superclass、cache、实例方法、属性、protocol等Runtime信息，调用实例方法的时候就是通过isa指针找到Class，然后找到IMP调用实际的方法。<br>Class本身也是一个对象，也有isa指针，指向meta-class，meta-class也是一个对象，有类方法等属性，调用类方法的时候，就是通过Class对象的isa指针找到meta-class，然后找到IMP调用实际的方法。<br>实例、Class、meta-class关系如下图，<a href="https://juejin.im/post/5a7e4d826fb9a0633d71d02d" target="_blank" rel="noopener">图片来源</a>：</p>
+<p><img src="https://upload-images.jianshu.io/upload_images/1368199-e9ed46f42de12566.png?imageMogr2/auto-orient/strip%7CimageView2/2/w/1240" alt="对象关系图"></p>
+<h1 id="消息机制"><a href="#消息机制" class="headerlink" title="消息机制"></a>消息机制</h1><p>当编译器遇到一个方法调用时，它会将方法的调用翻译成以下函数中的一个，<br>objc_msgSend、 objc_msgSend_stret、 objc_msgSendSuper 和 objc_msgSendSuper_stret。</p>
+<ul>
+<li>发送给对象的父类的消息会使用 objc_msgSendSuper ;</li>
+<li>有数据结构作为返回值的方法会使用 objc_msgSendSuper_stret 或 objc_msgSend_stret ;</li>
+<li>其它的消息都是使用 objc_msgSend 发送的。</li>
+</ul>
+<p>objc_msgSend查找selector的IMP，然后调用实际的方法，主要包括以下流程：</p>
+<ol>
+<li>查看cache是否有selector的IMP，如果有的话直接调用</li>
+<li>如果没cache，最终会调用lookUpImpOrForward，从类方法列表查找IMP并缓存到cache</li>
+<li>如果方法列表没有则会查找基类的方法，直到最上层基类(查找基类的时候也是先查找缓存，再查找方法列表)</li>
+<li>如果基类也没查找到，则返回_objc_msgForward的IMP，走消息转发流程。</li>
+</ol>
+<p>我们也可以自己通过class_getMethodImplementation拿到方法IMP(IMP是实际方法的函数指针)，然后调用：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">//[view addSubview:view2]</span><br><span class="line">void (*funtion_pointer)(id, SEL, UIView*) = (void(*)(id, SEL, UIView*)) class_getMethodImplementation((id)view, @selector(addSubview:));</span><br><span class="line">funtion_pointer(view, @selector(addSubview:), view2)</span><br></pre></td></tr></table></figure>
+<h1 id="汇编源码"><a href="#汇编源码" class="headerlink" title="汇编源码"></a>汇编源码</h1><p>objc_msgSend汇编源码在<a href="https://opensource.apple.com/source/objc4/objc4-723/runtime/Messengers.subproj/" target="_blank" rel="noopener">Messengers.subproj</a>目录，具体汇编如下：</p>
+<p><img src="https://upload-images.jianshu.io/upload_images/1368199-f40079879458fa38.jpg?imageMogr2/auto-orient/strip%7CimageView2/2/w/1240" alt="objc_msgSend汇编源码"></p>
+<p><img src="https://upload-images.jianshu.io/upload_images/1368199-1318490bd93e4a90.jpg?imageMogr2/auto-orient/strip%7CimageView2/2/w/1240" alt="_objc_msgSend_uncached汇编源码"></p>
+<p>objc_msgSend汇编代码不长，结合objc源码比较容易看懂。需要注意的是isa和TaggedPointer格式，isa指针不是纯粹的指针，还保存很多其它信息，具体可以参考isa_t union定义，其中只有3到35位才是class指针，所以查找之前会通过mask转换成class指针。</p>
+<p><img src="https://upload-images.jianshu.io/upload_images/1368199-6b3034fb353a1310.jpg?imageMogr2/auto-orient/strip%7CimageView2/2/w/1240" alt="isa格式"></p>
+<p>iOS系统为了提高性能和减小内存，使用了TaggedPointer来表示NSNumber、NSIndexPath等对象，对象并没有分配内存空间，而是把对象值保存在指针里面，只有指针无法容纳对象才会分配实际内存。TaggedPointer具体格式如下图，tag index表示具体Class，系统有维护一个全局映射表来保存tag index和Class的关系，具体可以查看<a href="https://opensource.apple.com/source/objc4/objc4-723/runtime/objc-internal.h.auto.html" target="_blank" rel="noopener">objc_tag_index_t</a>定义，查找到具体Class之后就跟正常oc对象一样查找IMP了。</p>
+<p><img src="https://upload-images.jianshu.io/upload_images/1368199-55ce227b4289cad7.jpg?imageMogr2/auto-orient/strip%7CimageView2/2/w/1240" alt="TaggedPointer指针格式"></p>
+<h1 id="Calling-Conventions"><a href="#Calling-Conventions" class="headerlink" title="Calling Conventions"></a>Calling Conventions</h1><p>arm64架构是通过q0-q7和x0-x7来传函数参数，可以看到objc_msgSend没对这几个寄存器做任何操作，找到IMP后直接通过br x17调用IMP，br告诉cpu不是子程序调用。<br>Objective-C所以方法发送都是通过objc_msgSend，每个方法返回值和参数都不一样，如果objc_msgSend像普通函数一样处理参数，为了处理不同参数类型和参数个数，可以使用varargs ，Objective-C调用的地方必须包裹成varargs，这样处理非常不灵活，objc_msgSend用了个很巧妙的技巧，就是对参数不做任何处理，查找到IMP后直接调用，因为在<strong>objc_msgSend开始执行时，栈帧（stack frame）的状态、数据，和各个寄存器的组合形式、数据，跟调用具体的函数指针（IMP）时所需的状态、数据，是完全一致的</strong>，所以我们用xcode调试的时候函数栈是看不到objc_msgSend，看上去就是消息发送过程完全没发生过，跟调用普通的c方法一摸一样。</p>
+<h1 id="黑科技"><a href="#黑科技" class="headerlink" title="黑科技"></a>黑科技</h1><p>objc_msgSend用很巧妙的技巧处理参数问题，利用这种技巧可以做很多方法，比如可以实现Aspects的效果，在调用实际方法前做些hook操作，hook完后再调实际方法。也可以使用libffi处理参数问题，可以搞很多事情。</p>
+<p>#引用</p>
+<p> <a href="http://www.arigrant.com/blog/2014/2/12/why-objcmsgsend-must-be-written-in-assembly" target="_blank" rel="noopener">Why objc_msgSend Must be Written in Assembly</a><br><a href="https://juejin.im/post/5a7e4d826fb9a0633d71d02d" target="_blank" rel="noopener">面向切面 Aspects 源码阅读</a><br><a href="http://www.cocoawithlove.com/2010/01/what-is-meta-class-in-objective-c.html" target="_blank" rel="noopener">What is a meta-class in Objective-C?</a><br><a href="https://blog.ibireme.com/2013/11/26/objective-c-messaging/" target="_blank" rel="noopener">Objective-C 中的消息与消息转发</a></p>
+
+      
+    </div>
+
+    
+
+    
+    
+    
+
+    
+
+    
+      
+    
+    
+
+    
+
+    <footer class="post-footer">
+      
+        <div class="post-tags">
+          
+            <a href="/tags/iOS/" rel="tag"># iOS</a>
+          
+        </div>
+      
+
+      
+      
+      
+
+      
+        <div class="post-nav">
+          <div class="post-nav-next post-nav-item">
+            
+              <a href="/2019/05/13/深入理解Core-Text排版引擎/" rel="next" title="深入理解Core Text排版引擎">
+                <i class="fa fa-chevron-left"></i> 深入理解Core Text排版引擎
+              </a>
+            
+          </div>
+
+          <span class="post-nav-divider"></span>
+
+          <div class="post-nav-prev post-nav-item">
+            
+              <a href="/2019/05/13/React-Native源码分析——Virtual-DOM/" rel="prev" title="React Native源码分析——Virtual DOM">
+                React Native源码分析——Virtual DOM <i class="fa fa-chevron-right"></i>
+              </a>
+            
+          </div>
+        </div>
+      
+
+      
+      
+    </footer>
+  </div>
+  
+  
+  
+  </article>
+
+
+  </div>
+
+
+          </div>
+          
+
+  
+
+
+
+        </div>
+        
+          
+  
+  <div class="sidebar-toggle">
+    <div class="sidebar-toggle-line-wrap">
+      <span class="sidebar-toggle-line sidebar-toggle-line-first"></span>
+      <span class="sidebar-toggle-line sidebar-toggle-line-middle"></span>
+      <span class="sidebar-toggle-line sidebar-toggle-line-last"></span>
+    </div>
+  </div>
+
+  <aside id="sidebar" class="sidebar">
+    <div class="sidebar-inner">
+
+      
+
+      
+        <ul class="sidebar-nav motion-element">
+          <li class="sidebar-nav-toc sidebar-nav-active" data-target="post-toc-wrap">
+            Table of Contents
+          </li>
+          <li class="sidebar-nav-overview" data-target="site-overview-wrap">
+            Overview
+          </li>
+        </ul>
+      
+
+      <div class="site-overview-wrap sidebar-panel">
+        <div class="site-overview">
+          <div class="site-author motion-element" itemprop="author" itemscope itemtype="http://schema.org/Person">
+            
+              <p class="site-author-name" itemprop="name">Alex Ting</p>
+              <div class="site-description motion-element" itemprop="description">守护心中的那一亩田</div>
+          </div>
+
+          
+            <nav class="site-state motion-element">
+              
+                <div class="site-state-item site-state-posts">
+                
+                  <a href="/archives/">
+                
+                    <span class="site-state-item-count">7</span>
+                    <span class="site-state-item-name">posts</span>
+                  </a>
+                </div>
+              
+
+              
+                
+                
+                <div class="site-state-item site-state-categories">
+                  
+                    
+                      <a href="/categories/">
+                    
+                  
+                    
+                    
+                      
+                    
+                      
+                    
+                    <span class="site-state-item-count">2</span>
+                    <span class="site-state-item-name">categories</span>
+                  </a>
+                </div>
+              
+
+              
+                
+                
+                <div class="site-state-item site-state-tags">
+                  
+                    
+                      <a href="/tags/">
+                    
+                  
+                    
+                    
+                      
+                    
+                      
+                    
+                      
+                    
+                      
+                    
+                    <span class="site-state-item-count">4</span>
+                    <span class="site-state-item-name">tags</span>
+                  </a>
+                </div>
+              
+            </nav>
+          
+
+          
+
+          
+
+          
+            <div class="links-of-author motion-element">
+              
+                <span class="links-of-author-item">
+                  
+                  
+                    
+                  
+                  
+                    
+                  
+                  <a href="https://github.com/yourname" title="GitHub &rarr; https://github.com/yourname" rel="noopener" target="_blank"><i class="fa fa-fw fa-github"></i>GitHub</a>
+                </span>
+              
+                <span class="links-of-author-item">
+                  
+                  
+                    
+                  
+                  
+                    
+                  
+                  <a href="mailto:yourname@gmail.com" title="E-Mail &rarr; mailto:yourname@gmail.com" rel="noopener" target="_blank"><i class="fa fa-fw fa-envelope"></i>E-Mail</a>
+                </span>
+              
+            </div>
+          
+
+          
+
+          
+          
+
+          
+            
+          
+          
+
+        </div>
+      </div>
+
+      
+      <!--noindex-->
+        <div class="post-toc-wrap motion-element sidebar-panel sidebar-panel-active">
+          <div class="post-toc">
+
+            
+            
+            
+            
+
+            
+              <div class="post-toc-content"><ol class="nav"><li class="nav-item nav-level-1"><a class="nav-link" href="#引言"><span class="nav-number">1.</span> <span class="nav-text">引言</span></a></li><li class="nav-item nav-level-1"><a class="nav-link" href="#Objective-C对象结构"><span class="nav-number">2.</span> <span class="nav-text">Objective-C对象结构</span></a></li><li class="nav-item nav-level-1"><a class="nav-link" href="#消息机制"><span class="nav-number">3.</span> <span class="nav-text">消息机制</span></a></li><li class="nav-item nav-level-1"><a class="nav-link" href="#汇编源码"><span class="nav-number">4.</span> <span class="nav-text">汇编源码</span></a></li><li class="nav-item nav-level-1"><a class="nav-link" href="#Calling-Conventions"><span class="nav-number">5.</span> <span class="nav-text">Calling Conventions</span></a></li><li class="nav-item nav-level-1"><a class="nav-link" href="#黑科技"><span class="nav-number">6.</span> <span class="nav-text">黑科技</span></a></li></ol></div>
+            
+
+          </div>
+        </div>
+      <!--/noindex-->
+      
+
+      
+        <div class="back-to-top">
+          <i class="fa fa-arrow-up"></i>
+          
+        </div>
+      
+
+    </div>
+  </aside>
+  
+
+
+        
+      </div>
+    </main>
+
+    <footer id="footer" class="footer">
+      <div class="footer-inner">
+        <div class="copyright">&copy; <span itemprop="copyrightYear">2019</span>
+  <span class="with-love" id="animate">
+    <i class="fa fa-user"></i>
+  </span>
+  <span class="author" itemprop="copyrightHolder">Alex Ting</span>
+
+  
+
+  
+</div>
+
+
+  <div class="powered-by">Powered by <a href="https://hexo.io" class="theme-link" rel="noopener" target="_blank">Hexo</a> v3.8.0</div>
+
+
+
+  <span class="post-meta-divider">|</span>
+
+
+
+  <div class="theme-info">Theme – <a href="https://theme-next.org" class="theme-link" rel="noopener" target="_blank">NexT.Pisces</a> v7.1.1</div>
+
+
+
+
+        
+
+
+
+
+
+
+
+
+        
+      </div>
+    </footer>
+
+    
+
+    
+
+    
+
+    
+  </div>
+
+  
+
+<script>
+  if (Object.prototype.toString.call(window.Promise) !== '[object Function]') {
+    window.Promise = null;
+  }
+</script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  
+  <script src="/lib/jquery/index.js?v=2.1.3"></script>
+
+  
+  <script src="/lib/velocity/velocity.min.js?v=1.2.1"></script>
+
+  
+  <script src="/lib/velocity/velocity.ui.min.js?v=1.2.1"></script>
+
+
+  
+
+
+  <script src="/js/utils.js?v=7.1.1"></script>
+
+  <script src="/js/motion.js?v=7.1.1"></script>
+
+
+
+  
+  
+
+
+  <script src="/js/affix.js?v=7.1.1"></script>
+
+  <script src="/js/schemes/pisces.js?v=7.1.1"></script>
+
+
+
+  
+  <script src="/js/scrollspy.js?v=7.1.1"></script>
+<script src="/js/post-details.js?v=7.1.1"></script>
+
+
+
+  
+
+
+  <script src="/js/next-boot.js?v=7.1.1"></script>
+
+
+  
+
+  
+
+  
+
+  
+
+
+  
+
+
+  
+
+
+
+
+  
+
+  
+
+  
+
+  
+
+  
+
+  
+
+  
+
+  
+
+  
+
+  
+
+  
+
+  
+
+  
+
+  
+
+</body>
+</html>

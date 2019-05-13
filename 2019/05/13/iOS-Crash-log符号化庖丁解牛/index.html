@@ -1,0 +1,899 @@
+<!DOCTYPE html>
+
+
+
+
+
+
+
+
+
+
+
+
+  
+
+
+<html class="theme-next pisces use-motion" lang>
+<head><meta name="generator" content="Hexo 3.8.0">
+  <meta charset="UTF-8">
+<meta http-equiv="X-UA-Compatible" content="IE=edge">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=2">
+<meta name="theme-color" content="#222">
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<link rel="stylesheet" href="/lib/font-awesome/css/font-awesome.min.css?v=4.6.2">
+
+<link rel="stylesheet" href="/css/main.css?v=7.1.1">
+
+
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon-next.png?v=7.1.1">
+
+
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32x32-next.png?v=7.1.1">
+
+
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/favicon-16x16-next.png?v=7.1.1">
+
+
+  <link rel="mask-icon" href="/images/logo.svg?v=7.1.1" color="#222">
+
+
+
+
+
+
+
+<script id="hexo.configurations">
+  var NexT = window.NexT || {};
+  var CONFIG = {
+    root: '/',
+    scheme: 'Pisces',
+    version: '7.1.1',
+    sidebar: {"position":"left","display":"post","offset":12,"onmobile":false,"dimmer":false},
+    back2top: true,
+    back2top_sidebar: true,
+    fancybox: false,
+    fastclick: false,
+    lazyload: false,
+    tabs: true,
+    motion: {"enable":true,"async":false,"transition":{"post_block":"fadeIn","post_header":"slideDownIn","post_body":"slideDownIn","coll_header":"slideLeftIn","sidebar":"slideUpIn"}},
+    algolia: {
+      applicationID: '',
+      apiKey: '',
+      indexName: '',
+      hits: {"per_page":10},
+      labels: {"input_placeholder":"Search for Posts","hits_empty":"We didn't find any results for the search: ${query}","hits_stats":"${hits} results found in ${time} ms"}
+    }
+  };
+</script>
+
+
+  
+
+
+
+
+  <meta name="description" content="项目在做zombie内存监测的时候有把zombie调用栈和oc对象释放栈报上来，由于我们的crash组件是用的第三方组件，zombie栈没法和crash log一起符号化，要自己对栈进行符号化，研究了一下CrashLog的还原原理和方法。 ###Crash Log符号还原方法 ####使用xcode 这是最简单的方法，要使用xcode进行符号还原需要下面三个文件：123Crash Reports（">
+<meta name="keywords" content="iOS">
+<meta property="og:type" content="article">
+<meta property="og:title" content="iOS Crash log符号化庖丁解牛">
+<meta property="og:url" content="http://yoursite.com/2019/05/13/iOS-Crash-log符号化庖丁解牛/index.html">
+<meta property="og:site_name" content="Alex&#39;s Blog">
+<meta property="og:description" content="项目在做zombie内存监测的时候有把zombie调用栈和oc对象释放栈报上来，由于我们的crash组件是用的第三方组件，zombie栈没法和crash log一起符号化，要自己对栈进行符号化，研究了一下CrashLog的还原原理和方法。 ###Crash Log符号还原方法 ####使用xcode 这是最简单的方法，要使用xcode进行符号还原需要下面三个文件：123Crash Reports（">
+<meta property="og:locale" content="default">
+<meta property="og:updated_time" content="2019-05-13T13:13:57.983Z">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:title" content="iOS Crash log符号化庖丁解牛">
+<meta name="twitter:description" content="项目在做zombie内存监测的时候有把zombie调用栈和oc对象释放栈报上来，由于我们的crash组件是用的第三方组件，zombie栈没法和crash log一起符号化，要自己对栈进行符号化，研究了一下CrashLog的还原原理和方法。 ###Crash Log符号还原方法 ####使用xcode 这是最简单的方法，要使用xcode进行符号还原需要下面三个文件：123Crash Reports（">
+
+
+
+
+
+  
+  
+  <link rel="canonical" href="http://yoursite.com/2019/05/13/iOS-Crash-log符号化庖丁解牛/">
+
+
+
+<script id="page.configurations">
+  CONFIG.page = {
+    sidebar: "",
+  };
+</script>
+
+  <title>iOS Crash log符号化庖丁解牛 | Alex's Blog</title>
+  
+
+
+
+
+
+
+
+
+
+
+
+
+  <noscript>
+  <style>
+  .use-motion .motion-element,
+  .use-motion .brand,
+  .use-motion .menu-item,
+  .sidebar-inner,
+  .use-motion .post-block,
+  .use-motion .pagination,
+  .use-motion .comments,
+  .use-motion .post-header,
+  .use-motion .post-body,
+  .use-motion .collection-title { opacity: initial; }
+
+  .use-motion .logo,
+  .use-motion .site-title,
+  .use-motion .site-subtitle {
+    opacity: initial;
+    top: initial;
+  }
+
+  .use-motion .logo-line-before i { left: initial; }
+  .use-motion .logo-line-after i { right: initial; }
+  </style>
+</noscript>
+
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage" lang="default">
+
+  
+  
+    
+  
+
+  <div class="container sidebar-position-left page-post-detail">
+    <div class="headband"></div>
+
+    <header id="header" class="header" itemscope itemtype="http://schema.org/WPHeader">
+      <div class="header-inner"><div class="site-brand-wrapper">
+  <div class="site-meta">
+    
+
+    <div class="custom-logo-site-title">
+      <a href="/" class="brand" rel="start">
+        <span class="logo-line-before"><i></i></span>
+        <span class="site-title">Alex's Blog</span>
+        <span class="logo-line-after"><i></i></span>
+      </a>
+    </div>
+    
+      
+        <p class="site-subtitle">起风了，唯有努力生存</p>
+      
+    
+    
+  </div>
+
+  <div class="site-nav-toggle">
+    <button aria-label="Toggle navigation bar">
+      <span class="btn-bar"></span>
+      <span class="btn-bar"></span>
+      <span class="btn-bar"></span>
+    </button>
+  </div>
+</div>
+
+
+
+<nav class="site-nav">
+  
+    <ul id="menu" class="menu">
+      
+        
+        
+        
+          
+          <li class="menu-item menu-item-home">
+
+    
+    
+    
+      
+    
+
+    
+
+    <a href="/" rel="section"><i class="menu-item-icon fa fa-fw fa-home"></i> <br>Home</a>
+
+  </li>
+        
+        
+        
+          
+          <li class="menu-item menu-item-about">
+
+    
+    
+    
+      
+    
+
+    
+
+    <a href="/about/" rel="section"><i class="menu-item-icon fa fa-fw fa-user"></i> <br>About</a>
+
+  </li>
+        
+        
+        
+          
+          <li class="menu-item menu-item-tags">
+
+    
+    
+    
+      
+    
+
+    
+
+    <a href="/tags/" rel="section"><i class="menu-item-icon fa fa-fw fa-tags"></i> <br>Tags</a>
+
+  </li>
+        
+        
+        
+          
+          <li class="menu-item menu-item-categories">
+
+    
+    
+    
+      
+    
+
+    
+
+    <a href="/categories/" rel="section"><i class="menu-item-icon fa fa-fw fa-th"></i> <br>Categories</a>
+
+  </li>
+        
+        
+        
+          
+          <li class="menu-item menu-item-archives">
+
+    
+    
+    
+      
+    
+
+    
+
+    <a href="/archives/" rel="section"><i class="menu-item-icon fa fa-fw fa-archive"></i> <br>Archives</a>
+
+  </li>
+
+      
+      
+    </ul>
+  
+
+  
+
+  
+</nav>
+
+
+
+  
+
+
+
+</div>
+    </header>
+
+    
+
+
+    <main id="main" class="main">
+      <div class="main-inner">
+        <div class="content-wrap">
+          
+            
+
+          
+          <div id="content" class="content">
+            
+
+  <div id="posts" class="posts-expand">
+    
+
+  
+
+  
+  
+  
+
+  
+
+  <article class="post post-type-normal" itemscope itemtype="http://schema.org/Article">
+  
+  
+  
+  <div class="post-block">
+    <link itemprop="mainEntityOfPage" href="http://yoursite.com/2019/05/13/iOS-Crash-log符号化庖丁解牛/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="name" content="Alex Ting">
+      <meta itemprop="description" content="守护心中的那一亩田">
+      <meta itemprop="image" content="/images/avatar.gif">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Alex's Blog">
+    </span>
+
+    
+      <header class="post-header">
+
+        
+        
+          <h1 class="post-title" itemprop="name headline">iOS Crash log符号化庖丁解牛
+
+              
+            
+          </h1>
+        
+
+        <div class="post-meta">
+          <span class="post-time">
+
+            
+            
+            
+
+            
+              <span class="post-meta-item-icon">
+                <i class="fa fa-calendar-o"></i>
+              </span>
+              
+                <span class="post-meta-item-text">Posted on</span>
+              
+
+              
+                
+              
+
+              <time title="Created: 2019-05-13 21:13:01 / Modified: 21:13:57" itemprop="dateCreated datePublished" datetime="2019-05-13T21:13:01+08:00">2019-05-13</time>
+            
+
+            
+              
+
+              
+            
+          </span>
+
+          
+            <span class="post-category">
+            
+              <span class="post-meta-divider">|</span>
+            
+              <span class="post-meta-item-icon">
+                <i class="fa fa-folder-o"></i>
+              </span>
+              
+                <span class="post-meta-item-text">In</span>
+              
+              
+                <span itemprop="about" itemscope itemtype="http://schema.org/Thing"><a href="/categories/iOS/" itemprop="url" rel="index"><span itemprop="name">iOS</span></a></span>
+
+                
+                
+              
+            </span>
+          
+
+          
+            
+            
+          
+
+          
+          
+
+          
+
+          
+
+          
+
+        </div>
+      </header>
+    
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+      
+
+      
+        <p>项目在做zombie内存监测的时候有把zombie调用栈和oc对象释放栈报上来，由于我们的crash组件是用的第三方组件，zombie栈没法和crash log一起符号化，要自己对栈进行符号化，研究了一下CrashLog的还原原理和方法。</p>
+<p>###Crash Log符号还原方法</p>
+<p>####使用xcode</p>
+<p>这是最简单的方法，要使用xcode进行符号还原需要下面三个文件：<br><figure class="highlight xml"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">Crash Reports（.crash文件）</span><br><span class="line">符号文件 (.dsymb文件)</span><br><span class="line">应用程序文件 (appName.app文件）</span><br></pre></td></tr></table></figure></p>
+<p>把这3个文件放到同一个目录下，打开Xcode的Window菜单下的organizer，然后点击Devices tab，然后选中左边的Device Logs。然后把.crash文件拖到Device Logs或者选择下面的import导入.crash文件。</p>
+<p>####使用symbolicatecrash</p>
+<p>symbolicatecrash是xcode自带的工具<br>将“.app“, “.dSYM”和 “.crash”文件放到同一个目录下，终端设置如下环境：<br><figure class="highlight shell"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">export DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer</span><br></pre></td></tr></table></figure></p>
+<p>然后输入下面命令</p>
+<figure class="highlight shell"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">/Applications/Xcode.app/Contents/Developer/Platforms/iPhoneOS.platform/Developer/Library/PrivateFrameworks/DTDeviceKitBase.framework/Versions/A/Resources/symbolicatecrash appName.crash appName.app &gt; appName.log</span><br></pre></td></tr></table></figure>
+<p>####使用atos命令行</p>
+<p>前面两种方法足够简单，但都不适合脚本自动化，并且我们也没有原始.crash文件，<br>本文重点介绍这种方法和内部的原理。<br>atos命令可以对指定的地址进行符号化</p>
+<blockquote>
+<p><em>NAME</em><br>     atos – convert numeric addresses to symbols of binary images or processes<br><em>SYNOPSIS</em><br>     atos [-o <binary-image-file>] [-p <pid> | <partial-executable-name>] [-arch architecture][-l <load-address>] [-s <slide>] [-printHeader] [-v] [-D] [-f <address-input-file>] [<address> …]<br><em>DESCRIPTION</em><br>     The atos command converts numeric addresses to their symbolic equivalents.  If full debug symbol infor-mation informationmation is available, for example in a .app.dSYM sitting beside a .app, then the output of atos will<br>include file name and source line number information.</address></address-input-file></slide></load-address></partial-executable-name></pid></binary-image-file></p>
+</blockquote>
+<p>###符号还原原理</p>
+<p>首先来看下需要还原的栈长啥样</p>
+<figure class="highlight html"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">0   AppName                     0x00000001009e3110 _ZNSt3__111char_traitsIcE2eqEcc + 7884972</span><br><span class="line">1   AppName                     0x0000000100620f04 _ZNSt3__111char_traitsIcE2eqEcc + 3944096</span><br><span class="line">2   CoreFoundation              0x0000000188e58f60 <span class="tag">&lt;<span class="name">redacted</span>&gt;</span> + 132</span><br><span class="line">3   CoreFoundation              0x0000000188d5280c _CF_forwarding_prep_0 + 92</span><br></pre></td></tr></table></figure>
+<p>看栈可以知道每个frame包括image名、代码地址、代码地址对应的符号信息，现在代码地址对应的符号是一串奇怪东东，我们要做的就是把这串奇怪的东东还原成可读的信息，包括函数名、原文件名、代码行。<br>要还原符号信息必须解决下面问题</p>
+<ul>
+<li>从哪里找函数名、原文件名、代码行这些信息</li>
+<li>怎么找这些信息</li>
+</ul>
+<p>###从哪里找函数名、原文件名、代码行这些信息</p>
+<p>####dSYM和DWARF</p>
+<p>dSYM(debugging SYMbol)是从Mach-O文件中抽取调试信息而得到的文件目录，发布的时候为了安全和减小安全，一般会把调试信息存储在单独的文件，dSYM实际是一个文件目录，其目录结构如下：</p>
+<figure class="highlight html"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">|--AppName.app.dSYM</span><br><span class="line">   |--Contents</span><br><span class="line">     |--info.plist</span><br><span class="line">     |--Resources</span><br><span class="line">       |--DWARF</span><br><span class="line">         |--AppName</span><br></pre></td></tr></table></figure>
+<p>dSYM符号信息实际存储在DWARF文件里面，DWARF （DebuggingWith Arbitrary Record Formats）是起源贝尔实验室的一种调试信息文件格式，是ELF和Mach-O等文件格式中用来存储和处理调试信息的标准格式。<br>DWARF文件包含所有调试信息，并且以section的形式进行存储，DWARF使用DIE(Debugging Information Entry)来存储具体信息，DIE通过树结构组织，DIE可以有兄弟节点和子节点。DWARF文件包括下面section：<br><figure class="highlight html"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><span class="line">.debug_abbrev              Abbreviations used in the .debug_info section</span><br><span class="line">.debug_aranges             A mapping between memory address and compilation</span><br><span class="line">.debug_frame               Call Frame Information</span><br><span class="line">.debug_info                The core DWARF data containing DIEs</span><br><span class="line">.debug_line                Line Number Program</span><br><span class="line">.debug_loc                 Macro descriptions</span><br><span class="line">.debug_macinfo             A lookup table for global objects and functions</span><br><span class="line">.debug_pubnames            A lookup table for global objects and functions</span><br><span class="line">.debug_pubtypes            A lookup table for global types</span><br><span class="line">.debug_ranges              Address ranges referenced by DIEs</span><br><span class="line">.debug_str                 String table used by.debug_info</span><br></pre></td></tr></table></figure></p>
+<p>其中主要信息存储在debug_info和debug_line里，debug_info存储了函数信息、变量信息等，debug_line存储了对应源代码行数信息。可以用dwarfdump工具读取dwarf文件里的section。使用dwarfdump读取下面demo dSYM文件的section</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">@interface DSYMDemo : NSObject</span><br><span class="line">@property (nonatomic, strong) NSString* var1;</span><br><span class="line">- (NSString*)test;</span><br><span class="line">@end</span><br></pre></td></tr></table></figure>
+<p>#####<em>debug_info</em></p>
+<p>使用dwarfdump读取DWARF文件debug_info信息<br><figure class="highlight shell"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">dwarfdump -e --debug-info DSYMDemo.app.dSYM/Contents/Resources/DWARF/DSYMDemo &gt; debug-info.txt</span><br></pre></td></tr></table></figure></p>
+<figure class="highlight html"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><span class="line">0x00034d29:     function [119] *</span><br><span class="line">                low pc( 0x0000000100006adc )</span><br><span class="line">                high pc( 0x0000000100006b14 )</span><br><span class="line">                frame base( reg29 )</span><br><span class="line">                object pointer( &#123;0x00034d49&#125; )</span><br><span class="line">                name( "-[DSYMDemo setVar1:]" )</span><br><span class="line">                decl file( "/Users/haishengding/Desktop/test/DSYMDemo/DSYMDemo/DSYMDemo.h" )</span><br><span class="line">                decl line( 13 )</span><br><span class="line">                prototyped( 0x01 )</span><br><span class="line">                artificial( 0x01 )</span><br><span class="line">                APPLE optimized( 0x01 )</span><br></pre></td></tr></table></figure>
+<p>可以看到DIE里面包括了函数开始地址、结束地址、函数名、原文件名、开始地址在原文件的行数。对于给定的地址，找到函数开始地址和结束地址之间包含改地址的DIE，则可以还原函数名和原文件名。</p>
+<p>#####<em>debug_line</em></p>
+<p>通过debug_info还原了函数名、原文件名，剩下原文行数则通过debug_line进行还原<br><figure class="highlight shell"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">dwarfdump -e --debug-line DSYMDemo.app.dSYM/Contents/Resources/DWARF/DSYMDemo &gt; debug-line.txt</span><br></pre></td></tr></table></figure></p>
+<figure class="highlight html"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><span class="line">Address                Line  File</span><br><span class="line">------------------ ------ ------------------------------</span><br><span class="line">0x0000000100006ac0     13 ~/Desktop/test/DSYMDemo/DSYMDemo/DSYMDemo.m</span><br><span class="line">0x0000000100006ac0     14</span><br><span class="line">0x0000000100006acc     13 ~/Desktop/test/DSYMDemo/DSYMDemo/DSYMDemo.h</span><br><span class="line">0x0000000100006acc     13</span><br><span class="line">0x0000000100006adc     13</span><br><span class="line">0x0000000100006aec      0</span><br><span class="line">0x0000000100006b14     11 ~/Desktop/test/DSYMDemo/DSYMDemo/DSYMDemo.m</span><br><span class="line">0x0000000100006b14     11</span><br><span class="line">0x0000000100006b28     11</span><br></pre></td></tr></table></figure>
+<p>可以看到debug_line里面包含了每个代码地址对应的行数。</p>
+<p>###怎么找这些信息</p>
+<p>已经知道对于指定的地址，通过dSYM文件可以还原符号信息，但怎么拿到这个地址呢？开始的函数栈frame有一个地址，就是这个地址吗？当然没这么简单，我们知道image加载的时候都会相对基地址进行重定位，并且每次加载的基地址都不一样，函数栈frame的地址是重定位后的绝对地址，我们要的是重定位前的相对地址。</p>
+<p>####Binary Images<br><figure class="highlight html"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">Binary Images:</span><br><span class="line">0x100050000 - 0x101c07fff +AppName arm64 <span class="tag">&lt;<span class="name">ab90a1c5646f35dca8f8cf1ce74c767c</span>&gt;</span> /var/containers/Bundle/Application/175ED3FA-7329-49DE-B54A-88EEC120412C/AppName.app/AppName</span><br><span class="line">0x187ee6000 - 0x187eeffff  libsystem_pthread.dylib arm64 <span class="tag">&lt;<span class="name">d8480fc3a35d3475b0d12553c761d8cb</span>&gt;</span> /usr/lib/system/libsystem_pthread.dylib</span><br><span class="line">0x187e04000 - 0x187e28fff  libsystem_kernel.dylib arm64</span><br></pre></td></tr></table></figure></p>
+<p>可以看到Crash Log的Binary Images块包含每个image加载起止地址、image名、arm架构、uuid、image路径。<br><figure class="highlight html"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">frame</span><br><span class="line">0   AppName   0x00000001009e3110 _ZNSt3__111char_traitsIcE2eqEcc + 7884972</span><br></pre></td></tr></table></figure></p>
+<figure class="highlight html"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">Binary Image</span><br><span class="line">0x100050000 - 0x101c07fff +AppName arm64 <span class="tag">&lt;<span class="name">ab90a1c5646f35dca8f8cf1ce74c767c</span>&gt;</span> /var/containers/Bundle/Application/175ED3FA-7329-49DE-B54A-88EEC120412C/AppName.app/AppName</span><br></pre></td></tr></table></figure>
+<p>frame0的地址<em>0x00000001009e3110－0x100050000</em> 就是函数的相对地址，使用改地址通过dSYM文件就可以还原符号。</p>
+<p>####UUID</p>
+<p>符号还原的时候必须通过匹配的dSYM，dSYM和image是通过UUID进行关联的，两者的UUID必须一样才能正确还原，image的UUID在Binary Images可以拿到，dSYM 的UUID可以通过dwarfdump读取<br><figure class="highlight shell"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">dwarfdump -u -arch arm64 AppName.app.dSYM/Contents/Resources/DWARF/AppName</span><br><span class="line">UUID: AB90A1C5-646F-35DC-A8F8-CF1CE74C767C (arm64) AppName.app.dSYM/Contents/Resources/DWARF/AppName</span><br></pre></td></tr></table></figure></p>
+<p>可以看到读取的跟image里的是一样的。</p>
+<p>###使用atos命令行</p>
+<p>上面讲了符号还原的原理，实际上atos工具帮我们做了这些事情，只要通过简单的命令就看还原了<br><figure class="highlight shell"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">atos -o AppName.app.dSYM/Contents/Resources/DWARF/AppName -arch arm64 -l 0x100050000 0x00000001009e3110</span><br><span class="line">currentCallStack (in AppName) (xxx.m:17)</span><br></pre></td></tr></table></figure></p>
+<p>其中<em>0x100050000</em>是image加载地址，<em> 0x00000001009e3110</em>是需要符号还原的绝对地址，atos自己会转成相对地址</p>
+<p>###系统符号</p>
+<p>dSYM文件只有我们自己代码的符号，系统函数则必须通过系统符号文件进行还原，系统符号一般存储在~/Library/Developer/Xcode/iOS DeviceSupport目录<br><figure class="highlight html"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">0x187ee6000 - 0x187eeffff  libsystem_pthread.dylib arm64 <span class="tag">&lt;<span class="name">d8480fc3a35d3475b0d12553c761d8cb</span>&gt;</span> /usr/lib/system/libsystem_pthread.dylib</span><br><span class="line">OS Version: iPhone OS 10.2 (14C92)</span><br></pre></td></tr></table></figure></p>
+<p>通过Crash Log文件Bianry Images和OS Version信息可找到对应的符号文件。</p>
+<p>###脚本化</p>
+<p>知道怎么还原具体frame栈桢的符号了，通个脚本解析每个栈桢就可以自动化还原整个栈了，像buggly平台应该也是用类似的方案。</p>
+<p><em>以上内容为本人工作学习中所得，如有错误之处，还请指出！</em></p>
+<p>###参考文件</p>
+<p><a href="https://possiblemobile.com/2015/03/symbolicating-your-ios-crash-reports/" title="Symbolicating Your iOS Crash Reports" target="_blank" rel="noopener">Symbolicating Your iOS Crash Reports</a><br><a href="https://developer.apple.com/library/content/technotes/tn2151/_index.html#//apple_ref/doc/uid/DTS40008184" title="Understanding and Analyzing Application Crash Reports" target="_blank" rel="noopener">Understanding and Analyzing Application Crash Reports</a><br><a href="http://www.dwarfstd.org/doc/Debugging%20using%20DWARF.pdf" title="Introduction to the DWARF Debugging Format" target="_blank" rel="noopener">Introduction to the DWARF Debugging Format</a></p>
+
+      
+    </div>
+
+    
+
+    
+    
+    
+
+    
+
+    
+      
+    
+    
+
+    
+
+    <footer class="post-footer">
+      
+        <div class="post-tags">
+          
+            <a href="/tags/iOS/" rel="tag"># iOS</a>
+          
+        </div>
+      
+
+      
+      
+      
+
+      
+        <div class="post-nav">
+          <div class="post-nav-next post-nav-item">
+            
+              <a href="/2019/05/13/iOS-WebView的一些总结/" rel="next" title="iOS WebView的一些总结">
+                <i class="fa fa-chevron-left"></i> iOS WebView的一些总结
+              </a>
+            
+          </div>
+
+          <span class="post-nav-divider"></span>
+
+          <div class="post-nav-prev post-nav-item">
+            
+              <a href="/2019/05/13/UITableView常见Crash案例分析/" rel="prev" title="UITableView常见Crash案例分析">
+                UITableView常见Crash案例分析 <i class="fa fa-chevron-right"></i>
+              </a>
+            
+          </div>
+        </div>
+      
+
+      
+      
+    </footer>
+  </div>
+  
+  
+  
+  </article>
+
+
+  </div>
+
+
+          </div>
+          
+
+  
+
+
+
+        </div>
+        
+          
+  
+  <div class="sidebar-toggle">
+    <div class="sidebar-toggle-line-wrap">
+      <span class="sidebar-toggle-line sidebar-toggle-line-first"></span>
+      <span class="sidebar-toggle-line sidebar-toggle-line-middle"></span>
+      <span class="sidebar-toggle-line sidebar-toggle-line-last"></span>
+    </div>
+  </div>
+
+  <aside id="sidebar" class="sidebar">
+    <div class="sidebar-inner">
+
+      
+
+      
+
+      <div class="site-overview-wrap sidebar-panel sidebar-panel-active">
+        <div class="site-overview">
+          <div class="site-author motion-element" itemprop="author" itemscope itemtype="http://schema.org/Person">
+            
+              <p class="site-author-name" itemprop="name">Alex Ting</p>
+              <div class="site-description motion-element" itemprop="description">守护心中的那一亩田</div>
+          </div>
+
+          
+            <nav class="site-state motion-element">
+              
+                <div class="site-state-item site-state-posts">
+                
+                  <a href="/archives/">
+                
+                    <span class="site-state-item-count">7</span>
+                    <span class="site-state-item-name">posts</span>
+                  </a>
+                </div>
+              
+
+              
+                
+                
+                <div class="site-state-item site-state-categories">
+                  
+                    
+                      <a href="/categories/">
+                    
+                  
+                    
+                    
+                      
+                    
+                      
+                    
+                    <span class="site-state-item-count">2</span>
+                    <span class="site-state-item-name">categories</span>
+                  </a>
+                </div>
+              
+
+              
+                
+                
+                <div class="site-state-item site-state-tags">
+                  
+                    
+                      <a href="/tags/">
+                    
+                  
+                    
+                    
+                      
+                    
+                      
+                    
+                      
+                    
+                      
+                    
+                    <span class="site-state-item-count">4</span>
+                    <span class="site-state-item-name">tags</span>
+                  </a>
+                </div>
+              
+            </nav>
+          
+
+          
+
+          
+
+          
+            <div class="links-of-author motion-element">
+              
+                <span class="links-of-author-item">
+                  
+                  
+                    
+                  
+                  
+                    
+                  
+                  <a href="https://github.com/yourname" title="GitHub &rarr; https://github.com/yourname" rel="noopener" target="_blank"><i class="fa fa-fw fa-github"></i>GitHub</a>
+                </span>
+              
+                <span class="links-of-author-item">
+                  
+                  
+                    
+                  
+                  
+                    
+                  
+                  <a href="mailto:yourname@gmail.com" title="E-Mail &rarr; mailto:yourname@gmail.com" rel="noopener" target="_blank"><i class="fa fa-fw fa-envelope"></i>E-Mail</a>
+                </span>
+              
+            </div>
+          
+
+          
+
+          
+          
+
+          
+            
+          
+          
+
+        </div>
+      </div>
+
+      
+
+      
+        <div class="back-to-top">
+          <i class="fa fa-arrow-up"></i>
+          
+        </div>
+      
+
+    </div>
+  </aside>
+  
+
+
+        
+      </div>
+    </main>
+
+    <footer id="footer" class="footer">
+      <div class="footer-inner">
+        <div class="copyright">&copy; <span itemprop="copyrightYear">2019</span>
+  <span class="with-love" id="animate">
+    <i class="fa fa-user"></i>
+  </span>
+  <span class="author" itemprop="copyrightHolder">Alex Ting</span>
+
+  
+
+  
+</div>
+
+
+  <div class="powered-by">Powered by <a href="https://hexo.io" class="theme-link" rel="noopener" target="_blank">Hexo</a> v3.8.0</div>
+
+
+
+  <span class="post-meta-divider">|</span>
+
+
+
+  <div class="theme-info">Theme – <a href="https://theme-next.org" class="theme-link" rel="noopener" target="_blank">NexT.Pisces</a> v7.1.1</div>
+
+
+
+
+        
+
+
+
+
+
+
+
+
+        
+      </div>
+    </footer>
+
+    
+
+    
+
+    
+
+    
+  </div>
+
+  
+
+<script>
+  if (Object.prototype.toString.call(window.Promise) !== '[object Function]') {
+    window.Promise = null;
+  }
+</script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  
+  <script src="/lib/jquery/index.js?v=2.1.3"></script>
+
+  
+  <script src="/lib/velocity/velocity.min.js?v=1.2.1"></script>
+
+  
+  <script src="/lib/velocity/velocity.ui.min.js?v=1.2.1"></script>
+
+
+  
+
+
+  <script src="/js/utils.js?v=7.1.1"></script>
+
+  <script src="/js/motion.js?v=7.1.1"></script>
+
+
+
+  
+  
+
+
+  <script src="/js/affix.js?v=7.1.1"></script>
+
+  <script src="/js/schemes/pisces.js?v=7.1.1"></script>
+
+
+
+  
+  <script src="/js/scrollspy.js?v=7.1.1"></script>
+<script src="/js/post-details.js?v=7.1.1"></script>
+
+
+
+  
+
+
+  <script src="/js/next-boot.js?v=7.1.1"></script>
+
+
+  
+
+  
+
+  
+
+  
+
+
+  
+
+
+  
+
+
+
+
+  
+
+  
+
+  
+
+  
+
+  
+
+  
+
+  
+
+  
+
+  
+
+  
+
+  
+
+  
+
+  
+
+  
+
+</body>
+</html>

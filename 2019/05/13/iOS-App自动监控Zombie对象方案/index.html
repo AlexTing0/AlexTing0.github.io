@@ -1,0 +1,921 @@
+<!DOCTYPE html>
+
+
+
+
+
+
+
+
+
+
+
+
+  
+
+
+<html class="theme-next pisces use-motion" lang>
+<head><meta name="generator" content="Hexo 3.8.0">
+  <meta charset="UTF-8">
+<meta http-equiv="X-UA-Compatible" content="IE=edge">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=2">
+<meta name="theme-color" content="#222">
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<link rel="stylesheet" href="/lib/font-awesome/css/font-awesome.min.css?v=4.6.2">
+
+<link rel="stylesheet" href="/css/main.css?v=7.1.1">
+
+
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon-next.png?v=7.1.1">
+
+
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32x32-next.png?v=7.1.1">
+
+
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/favicon-16x16-next.png?v=7.1.1">
+
+
+  <link rel="mask-icon" href="/images/logo.svg?v=7.1.1" color="#222">
+
+
+
+
+
+
+
+<script id="hexo.configurations">
+  var NexT = window.NexT || {};
+  var CONFIG = {
+    root: '/',
+    scheme: 'Pisces',
+    version: '7.1.1',
+    sidebar: {"position":"left","display":"post","offset":12,"onmobile":false,"dimmer":false},
+    back2top: true,
+    back2top_sidebar: true,
+    fancybox: false,
+    fastclick: false,
+    lazyload: false,
+    tabs: true,
+    motion: {"enable":true,"async":false,"transition":{"post_block":"fadeIn","post_header":"slideDownIn","post_body":"slideDownIn","coll_header":"slideLeftIn","sidebar":"slideUpIn"}},
+    algolia: {
+      applicationID: '',
+      apiKey: '',
+      indexName: '',
+      hits: {"per_page":10},
+      labels: {"input_placeholder":"Search for Posts","hits_empty":"We didn't find any results for the search: ${query}","hits_stats":"${hits} results found in ${time} ms"}
+    }
+  };
+</script>
+
+
+  
+
+
+
+
+  <meta name="description" content="iOS开发过程或者线上版本经常有Crash崩溃在objc_msgSend、objc_retain、objc_release等方法，这些都是典型等Zombie问题，在开发过程可以使用Instruments工具定位，但对于线上问题或者很难复的问题Instruments就很难定位了，如果能主动捕捉Zombie对象，并且Trace Zombie对象信息和释放栈，那就很容易分析问题了。本文介绍一种主动监控">
+<meta name="keywords" content="iOS,Zombie">
+<meta property="og:type" content="article">
+<meta property="og:title" content="iOS App自动监控Zombie对象方案">
+<meta property="og:url" content="http://yoursite.com/2019/05/13/iOS-App自动监控Zombie对象方案/index.html">
+<meta property="og:site_name" content="Alex&#39;s Blog">
+<meta property="og:description" content="iOS开发过程或者线上版本经常有Crash崩溃在objc_msgSend、objc_retain、objc_release等方法，这些都是典型等Zombie问题，在开发过程可以使用Instruments工具定位，但对于线上问题或者很难复的问题Instruments就很难定位了，如果能主动捕捉Zombie对象，并且Trace Zombie对象信息和释放栈，那就很容易分析问题了。本文介绍一种主动监控">
+<meta property="og:locale" content="default">
+<meta property="og:image" content="https://upload-images.jianshu.io/upload_images/1368199-74885312d94feb52.jpg?imageMogr2/auto-orient/strip%7CimageView2/2/w/1240">
+<meta property="og:updated_time" content="2019-05-13T13:17:30.910Z">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:title" content="iOS App自动监控Zombie对象方案">
+<meta name="twitter:description" content="iOS开发过程或者线上版本经常有Crash崩溃在objc_msgSend、objc_retain、objc_release等方法，这些都是典型等Zombie问题，在开发过程可以使用Instruments工具定位，但对于线上问题或者很难复的问题Instruments就很难定位了，如果能主动捕捉Zombie对象，并且Trace Zombie对象信息和释放栈，那就很容易分析问题了。本文介绍一种主动监控">
+<meta name="twitter:image" content="https://upload-images.jianshu.io/upload_images/1368199-74885312d94feb52.jpg?imageMogr2/auto-orient/strip%7CimageView2/2/w/1240">
+
+
+
+
+
+  
+  
+  <link rel="canonical" href="http://yoursite.com/2019/05/13/iOS-App自动监控Zombie对象方案/">
+
+
+
+<script id="page.configurations">
+  CONFIG.page = {
+    sidebar: "",
+  };
+</script>
+
+  <title>iOS App自动监控Zombie对象方案 | Alex's Blog</title>
+  
+
+
+
+
+
+
+
+
+
+
+
+
+  <noscript>
+  <style>
+  .use-motion .motion-element,
+  .use-motion .brand,
+  .use-motion .menu-item,
+  .sidebar-inner,
+  .use-motion .post-block,
+  .use-motion .pagination,
+  .use-motion .comments,
+  .use-motion .post-header,
+  .use-motion .post-body,
+  .use-motion .collection-title { opacity: initial; }
+
+  .use-motion .logo,
+  .use-motion .site-title,
+  .use-motion .site-subtitle {
+    opacity: initial;
+    top: initial;
+  }
+
+  .use-motion .logo-line-before i { left: initial; }
+  .use-motion .logo-line-after i { right: initial; }
+  </style>
+</noscript>
+
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage" lang="default">
+
+  
+  
+    
+  
+
+  <div class="container sidebar-position-left page-post-detail">
+    <div class="headband"></div>
+
+    <header id="header" class="header" itemscope itemtype="http://schema.org/WPHeader">
+      <div class="header-inner"><div class="site-brand-wrapper">
+  <div class="site-meta">
+    
+
+    <div class="custom-logo-site-title">
+      <a href="/" class="brand" rel="start">
+        <span class="logo-line-before"><i></i></span>
+        <span class="site-title">Alex's Blog</span>
+        <span class="logo-line-after"><i></i></span>
+      </a>
+    </div>
+    
+      
+        <p class="site-subtitle">起风了，唯有努力生存</p>
+      
+    
+    
+  </div>
+
+  <div class="site-nav-toggle">
+    <button aria-label="Toggle navigation bar">
+      <span class="btn-bar"></span>
+      <span class="btn-bar"></span>
+      <span class="btn-bar"></span>
+    </button>
+  </div>
+</div>
+
+
+
+<nav class="site-nav">
+  
+    <ul id="menu" class="menu">
+      
+        
+        
+        
+          
+          <li class="menu-item menu-item-home">
+
+    
+    
+    
+      
+    
+
+    
+
+    <a href="/" rel="section"><i class="menu-item-icon fa fa-fw fa-home"></i> <br>Home</a>
+
+  </li>
+        
+        
+        
+          
+          <li class="menu-item menu-item-about">
+
+    
+    
+    
+      
+    
+
+    
+
+    <a href="/about/" rel="section"><i class="menu-item-icon fa fa-fw fa-user"></i> <br>About</a>
+
+  </li>
+        
+        
+        
+          
+          <li class="menu-item menu-item-tags">
+
+    
+    
+    
+      
+    
+
+    
+
+    <a href="/tags/" rel="section"><i class="menu-item-icon fa fa-fw fa-tags"></i> <br>Tags</a>
+
+  </li>
+        
+        
+        
+          
+          <li class="menu-item menu-item-categories">
+
+    
+    
+    
+      
+    
+
+    
+
+    <a href="/categories/" rel="section"><i class="menu-item-icon fa fa-fw fa-th"></i> <br>Categories</a>
+
+  </li>
+        
+        
+        
+          
+          <li class="menu-item menu-item-archives">
+
+    
+    
+    
+      
+    
+
+    
+
+    <a href="/archives/" rel="section"><i class="menu-item-icon fa fa-fw fa-archive"></i> <br>Archives</a>
+
+  </li>
+
+      
+      
+    </ul>
+  
+
+  
+
+  
+</nav>
+
+
+
+  
+
+
+
+</div>
+    </header>
+
+    
+
+
+    <main id="main" class="main">
+      <div class="main-inner">
+        <div class="content-wrap">
+          
+            
+
+          
+          <div id="content" class="content">
+            
+
+  <div id="posts" class="posts-expand">
+    
+
+  
+
+  
+  
+  
+
+  
+
+  <article class="post post-type-normal" itemscope itemtype="http://schema.org/Article">
+  
+  
+  
+  <div class="post-block">
+    <link itemprop="mainEntityOfPage" href="http://yoursite.com/2019/05/13/iOS-App自动监控Zombie对象方案/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="name" content="Alex Ting">
+      <meta itemprop="description" content="守护心中的那一亩田">
+      <meta itemprop="image" content="/images/avatar.gif">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Alex's Blog">
+    </span>
+
+    
+      <header class="post-header">
+
+        
+        
+          <h1 class="post-title" itemprop="name headline">iOS App自动监控Zombie对象方案
+
+              
+            
+          </h1>
+        
+
+        <div class="post-meta">
+          <span class="post-time">
+
+            
+            
+            
+
+            
+              <span class="post-meta-item-icon">
+                <i class="fa fa-calendar-o"></i>
+              </span>
+              
+                <span class="post-meta-item-text">Posted on</span>
+              
+
+              
+                
+              
+
+              <time title="Created: 2019-05-13 21:15:27 / Modified: 21:17:30" itemprop="dateCreated datePublished" datetime="2019-05-13T21:15:27+08:00">2019-05-13</time>
+            
+
+            
+              
+
+              
+            
+          </span>
+
+          
+            <span class="post-category">
+            
+              <span class="post-meta-divider">|</span>
+            
+              <span class="post-meta-item-icon">
+                <i class="fa fa-folder-o"></i>
+              </span>
+              
+                <span class="post-meta-item-text">In</span>
+              
+              
+                <span itemprop="about" itemscope itemtype="http://schema.org/Thing"><a href="/categories/iOS/" itemprop="url" rel="index"><span itemprop="name">iOS</span></a></span>
+
+                
+                
+              
+            </span>
+          
+
+          
+            
+            
+          
+
+          
+          
+
+          
+
+          
+
+          
+
+        </div>
+      </header>
+    
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+      
+
+      
+        <blockquote>
+<p>iOS开发过程或者线上版本经常有Crash崩溃在objc_msgSend、objc_retain、objc_release等方法，这些都是典型等Zombie问题，在开发过程可以使用Instruments工具定位，但对于线上问题或者很难复的问题Instruments就很难定位了，如果能主动捕捉Zombie对象，并且Trace Zombie对象信息和释放栈，那就很容易分析问题了。本文介绍一种主动监控Zombie对象方案，方案已经上线验证一段时间了，并且已经在github上开源了。</p>
+</blockquote>
+<h2 id="为什么使用ARC还会有Zombie问题？"><a href="#为什么使用ARC还会有Zombie问题？" class="headerlink" title="为什么使用ARC还会有Zombie问题？"></a>为什么使用ARC还会有Zombie问题？</h2><p>可能很多同学觉得使用ARC和weak属性后就不会有Zombie问题了，但App上线后还是会发现很多Zombie问题，主要是因为：</p>
+<ul>
+<li>还有很多地方使用assign<br>由于历史原因，系统库还有地方使用assign，最典型的就是<strong>iOS8下UITableView delegate和dataSource</strong>，相信大部分iOS开发都遇到过这个问题导致的Crash，还有就是自己都代码也可能使用assign。</li>
+<li>线程安全问题<br>虽然ARC下可以不用考虑对象释放问题，但如果不是线程安全的话，就算使用weak还是可能导致Zombie问题。</li>
+</ul>
+<h2 id="如何分析Zombie问题？"><a href="#如何分析Zombie问题？" class="headerlink" title="如何分析Zombie问题？"></a>如何分析Zombie问题？</h2><p>大多数Zombie问题都是Crash在objc_msgSend方法，一般都是消息转发的时候发生EXC_BAD_ACCESS错误，但从堆栈上无法看出是什么对象、什么方法出了问题，并且很多时候也不是Crash在我们自己但代码附近，这种情况就更难分析了。<br>我们知道调用<strong>objc_msgSend方法的时候前面几个参数是通过x0~x7寄存器传递的，其中x0是self指针，x1是SEL</strong>，如果能知道Crash在哪个SEL，结合代码有可能进一步分析出哪里Crash了。SEL是指向C string的指针，并且C string 保存在__TEXT段，所以结合dSYM和x1寄存器，正常情况下是可以解析出SEL的，具体解析方法可以参考<a href="http://sealiesoftware.com/blog/archive/2008/09/22/objc_explain_So_you_crashed_in_objc_msgSend.html" target="_blank" rel="noopener">「So you crashed in objc_msgSend()」</a>。<br>如果SEL是很常见的方法，即使知道SEL还是很分析出问题，这个时候如果能知道Zombie对象类名，对象释放栈的话就能很容易分析出问题了，但仅通过Crash log文件是无法获取这些信息的，这也是大多数Zombie问题很难定位的原因。<br>其实除了Crash，Zombie也可能只是导致逻辑错误，这个时候就更难定位问题了，因为往往问题现场离对象释放的地方很远。</p>
+<h2 id="自动监控Zombie对象方案"><a href="#自动监控Zombie对象方案" class="headerlink" title="自动监控Zombie对象方案"></a>自动监控Zombie对象方案</h2><p>如果能主动监测Zombie，在第一次使用Zombie对象的时候就发现问题，可以进行上报，也可以主动触发Crash，同时在释放对象的时候保存对象信息，可以知道到底是哪个对象出现了问题，这样可以极大的提高Zombie问题的发现率和解决率。<br>要在线上版本实时监控，监控组件必须对App性能影响很小，在设计对时候从下面点考虑：</p>
+<ul>
+<li>Trace Zombie对象类名、selector、释放栈信息</li>
+<li>内存可控</li>
+<li>监控策略可控</li>
+<li>对cpu影响要很小</li>
+</ul>
+<h4 id="如何监控"><a href="#如何监控" class="headerlink" title="如何监控"></a>如何监控</h4><p>要监控Zombie对象，就必须监控访问已经释放对对象，所以可以从下面几个点思考：</p>
+<ol>
+<li>如何监控对象释放<br>Objective-C上可以方便的使用Method swizzling hook dealloc方法监控对象的释放，Method swizzling只能监控Objective-C对象的释放；也可以在更底层hook free，使用Fishhook可以很方便的hook free方法，hook free可以监控所以对象的释放。</li>
+<li>如何监控访问已经释放的对象<br>可以使用Objective-C Runtime消息转发机制监控Objective-C对象访问，要监控C/C++对象访问复杂些，一种方法是对象释放后使用vm_protect设置虚拟内存为不可读写，不过vm_protect只能以内存页为单位进行设置。</li>
+</ol>
+<p>####最终方案</p>
+<p>因为iOS App上大部分自定义对象都是Objective-C对象，所以最终使用Method swizzling hook dealloc方法监控对象的释放，并且使用Runtime消息转发机制监控Objective-C对象访问，主要过程如下：</p>
+<ol>
+<li>hook dealloc方法，dealloc时只析构对象，不释放内存，更换isa指针指向ZombieHandler Class</li>
+<li>延迟释放对象</li>
+<li>ZombieHandler Class拦截消息，从而监控使Zombie对象<br>方案模块结构如下图：<br><img src="https://upload-images.jianshu.io/upload_images/1368199-74885312d94feb52.jpg?imageMogr2/auto-orient/strip%7CimageView2/2/w/1240" alt="Zombie监控模块结构图"></li>
+</ol>
+<h4 id="内存优化"><a href="#内存优化" class="headerlink" title="内存优化"></a>内存优化</h4><p>一开始对象释放栈保存完整的栈，并且保存string类型，类似下面</p>
+<blockquote>
+<p>“1   libdispatch.dylib    0x0000000021809823 0x21807000 + 10275”<br>        “2   libdispatch.dylib    0x0000000021809823 0x21807000 + 10275”</p>
+</blockquote>
+<p>后来改成只保存函数地址，并且arm64下每个地址只用40bit，iOS64位系统下每个地址其实只用了36位，使用40位方便操作，上报的时候也只上报函数地址，这样可以极大程度的减小组件占用的内存，优化后栈类型下面：</p>
+<blockquote>
+<p>dealloc stack:{<br>tid:1027<br>stack:[0x0000000100047534,0x000000010004b2e4,0x00000001000498b0,0x000000018e9bdf9c,0x000000018e9bdb78,0x000000018e9c43f8,0x000000018e9c1894,0x000000018ea332fc,]<br>}</p>
+</blockquote>
+<p>其实栈可以直接保存在延迟释放对象的内存上面，这样可以进一步优化内存使用。</p>
+<h4 id="开源"><a href="#开源" class="headerlink" title="开源"></a>开源</h4><p>监控组件已经开源，并且提供符号化脚本，使用也很简单，只需要几行调用就可以：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line">//setup DDZombieMonitor</span><br><span class="line">void (^zombieHandle)(NSString *className, void *obj, NSString *selectorName, NSString *deallocStack, NSString *zombieStack) = ^(NSString *className, void *obj, NSString *selectorName, NSString *deallocStack, NSString *zombieStack) &#123;</span><br><span class="line">    NSString *zombeiInfo = [NSString stringWithFormat:@&quot;ZombieInfo = \&quot;detect zombie class:%@ obj:%p sel:%@\ndealloc stack:%@\nzombie stack:%@\&quot;&quot;, className, obj, selectorName, deallocStack, zombieStack];</span><br><span class="line">    NSLog(@&quot;%@&quot;, zombeiInfo);</span><br><span class="line">    </span><br><span class="line">    NSString *binaryImages = [NSString stringWithFormat:@&quot;BinaryImages = \&quot;%@\&quot;&quot;, [self binaryImages]];</span><br><span class="line">    NSLog(@&quot;%@&quot;, binaryImages);</span><br><span class="line">&#125;;</span><br><span class="line">[DDZombieMonitor sharedInstance].handle = zombieHandle;</span><br><span class="line">[[DDZombieMonitor sharedInstance] startMonitor];</span><br></pre></td></tr></table></figure>
+<p><strong>组件支持下面特性</strong></p>
+<ul>
+<li>主动监控Zombie问题，并且提供Zombie对象类名、selector、释放栈信息</li>
+<li>支持不同监控策略，包括App内自定义类、白名单、黑名单、所有对象</li>
+<li>支持设置最大占用内存</li>
+<li>组件在收到内存告警或超过最大内存时，通过FIFO算法释放部分对象</li>
+</ul>
+<h4 id="性能影响和稳定性"><a href="#性能影响和稳定性" class="headerlink" title="性能影响和稳定性"></a>性能影响和稳定性</h4><p>组件上线一两个版本了，目前还没发现Crash<br>cpu影响：打开Zombie检测前后相差0.2%左右，影响很小<br>内存影响：Zombie组件内存开关为10M的时候，实际内存增加11M左右，10M只计算了延迟释放对象和对象释放栈，组件本身占用内存没计算在内，符合预期</p>
+<p>具体源码请移步<strong><a href="https://github.com/AlexTing0/DDZombieMonitor" target="_blank" rel="noopener">「github DDZombieMonitor」</a></strong></p>
+<h2 id="参考"><a href="#参考" class="headerlink" title="参考"></a>参考</h2><p><em><a href="http://sealiesoftware.com/blog/archive/2008/09/22/objc_explain_So_you_crashed_in_objc_msgSend.html" target="_blank" rel="noopener">So you crashed in objc_msgSend()</a></em><br><em><a href="https://www.jianshu.com/p/df4b41ecc683" target="_blank" rel="noopener">手动分析iOS Crash log庖丁解牛</a></em></p>
+
+      
+    </div>
+
+    
+
+    
+    
+    
+
+    
+
+    
+      
+    
+    
+
+    
+
+    <footer class="post-footer">
+      
+        <div class="post-tags">
+          
+            <a href="/tags/iOS/" rel="tag"># iOS</a>
+          
+            <a href="/tags/Zombie/" rel="tag"># Zombie</a>
+          
+        </div>
+      
+
+      
+      
+      
+
+      
+        <div class="post-nav">
+          <div class="post-nav-next post-nav-item">
+            
+              <a href="/2019/05/13/UITableView常见Crash案例分析/" rel="next" title="UITableView常见Crash案例分析">
+                <i class="fa fa-chevron-left"></i> UITableView常见Crash案例分析
+              </a>
+            
+          </div>
+
+          <span class="post-nav-divider"></span>
+
+          <div class="post-nav-prev post-nav-item">
+            
+              <a href="/2019/05/13/深入理解Core-Text排版引擎/" rel="prev" title="深入理解Core Text排版引擎">
+                深入理解Core Text排版引擎 <i class="fa fa-chevron-right"></i>
+              </a>
+            
+          </div>
+        </div>
+      
+
+      
+      
+    </footer>
+  </div>
+  
+  
+  
+  </article>
+
+
+  </div>
+
+
+          </div>
+          
+
+  
+
+
+
+        </div>
+        
+          
+  
+  <div class="sidebar-toggle">
+    <div class="sidebar-toggle-line-wrap">
+      <span class="sidebar-toggle-line sidebar-toggle-line-first"></span>
+      <span class="sidebar-toggle-line sidebar-toggle-line-middle"></span>
+      <span class="sidebar-toggle-line sidebar-toggle-line-last"></span>
+    </div>
+  </div>
+
+  <aside id="sidebar" class="sidebar">
+    <div class="sidebar-inner">
+
+      
+
+      
+        <ul class="sidebar-nav motion-element">
+          <li class="sidebar-nav-toc sidebar-nav-active" data-target="post-toc-wrap">
+            Table of Contents
+          </li>
+          <li class="sidebar-nav-overview" data-target="site-overview-wrap">
+            Overview
+          </li>
+        </ul>
+      
+
+      <div class="site-overview-wrap sidebar-panel">
+        <div class="site-overview">
+          <div class="site-author motion-element" itemprop="author" itemscope itemtype="http://schema.org/Person">
+            
+              <p class="site-author-name" itemprop="name">Alex Ting</p>
+              <div class="site-description motion-element" itemprop="description">守护心中的那一亩田</div>
+          </div>
+
+          
+            <nav class="site-state motion-element">
+              
+                <div class="site-state-item site-state-posts">
+                
+                  <a href="/archives/">
+                
+                    <span class="site-state-item-count">7</span>
+                    <span class="site-state-item-name">posts</span>
+                  </a>
+                </div>
+              
+
+              
+                
+                
+                <div class="site-state-item site-state-categories">
+                  
+                    
+                      <a href="/categories/">
+                    
+                  
+                    
+                    
+                      
+                    
+                      
+                    
+                    <span class="site-state-item-count">2</span>
+                    <span class="site-state-item-name">categories</span>
+                  </a>
+                </div>
+              
+
+              
+                
+                
+                <div class="site-state-item site-state-tags">
+                  
+                    
+                      <a href="/tags/">
+                    
+                  
+                    
+                    
+                      
+                    
+                      
+                    
+                      
+                    
+                      
+                    
+                    <span class="site-state-item-count">4</span>
+                    <span class="site-state-item-name">tags</span>
+                  </a>
+                </div>
+              
+            </nav>
+          
+
+          
+
+          
+
+          
+            <div class="links-of-author motion-element">
+              
+                <span class="links-of-author-item">
+                  
+                  
+                    
+                  
+                  
+                    
+                  
+                  <a href="https://github.com/yourname" title="GitHub &rarr; https://github.com/yourname" rel="noopener" target="_blank"><i class="fa fa-fw fa-github"></i>GitHub</a>
+                </span>
+              
+                <span class="links-of-author-item">
+                  
+                  
+                    
+                  
+                  
+                    
+                  
+                  <a href="mailto:yourname@gmail.com" title="E-Mail &rarr; mailto:yourname@gmail.com" rel="noopener" target="_blank"><i class="fa fa-fw fa-envelope"></i>E-Mail</a>
+                </span>
+              
+            </div>
+          
+
+          
+
+          
+          
+
+          
+            
+          
+          
+
+        </div>
+      </div>
+
+      
+      <!--noindex-->
+        <div class="post-toc-wrap motion-element sidebar-panel sidebar-panel-active">
+          <div class="post-toc">
+
+            
+            
+            
+            
+
+            
+              <div class="post-toc-content"><ol class="nav"><li class="nav-item nav-level-2"><a class="nav-link" href="#为什么使用ARC还会有Zombie问题？"><span class="nav-number">1.</span> <span class="nav-text">为什么使用ARC还会有Zombie问题？</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#如何分析Zombie问题？"><span class="nav-number">2.</span> <span class="nav-text">如何分析Zombie问题？</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#自动监控Zombie对象方案"><span class="nav-number">3.</span> <span class="nav-text">自动监控Zombie对象方案</span></a><ol class="nav-child"><li class="nav-item nav-level-4"><a class="nav-link" href="#如何监控"><span class="nav-number">3.0.1.</span> <span class="nav-text">如何监控</span></a></li><li class="nav-item nav-level-4"><a class="nav-link" href="#内存优化"><span class="nav-number">3.0.2.</span> <span class="nav-text">内存优化</span></a></li><li class="nav-item nav-level-4"><a class="nav-link" href="#开源"><span class="nav-number">3.0.3.</span> <span class="nav-text">开源</span></a></li><li class="nav-item nav-level-4"><a class="nav-link" href="#性能影响和稳定性"><span class="nav-number">3.0.4.</span> <span class="nav-text">性能影响和稳定性</span></a></li></ol></li></ol><li class="nav-item nav-level-2"><a class="nav-link" href="#参考"><span class="nav-number">4.</span> <span class="nav-text">参考</span></a></li></div>
+            
+
+          </div>
+        </div>
+      <!--/noindex-->
+      
+
+      
+        <div class="back-to-top">
+          <i class="fa fa-arrow-up"></i>
+          
+        </div>
+      
+
+    </div>
+  </aside>
+  
+
+
+        
+      </div>
+    </main>
+
+    <footer id="footer" class="footer">
+      <div class="footer-inner">
+        <div class="copyright">&copy; <span itemprop="copyrightYear">2019</span>
+  <span class="with-love" id="animate">
+    <i class="fa fa-user"></i>
+  </span>
+  <span class="author" itemprop="copyrightHolder">Alex Ting</span>
+
+  
+
+  
+</div>
+
+
+  <div class="powered-by">Powered by <a href="https://hexo.io" class="theme-link" rel="noopener" target="_blank">Hexo</a> v3.8.0</div>
+
+
+
+  <span class="post-meta-divider">|</span>
+
+
+
+  <div class="theme-info">Theme – <a href="https://theme-next.org" class="theme-link" rel="noopener" target="_blank">NexT.Pisces</a> v7.1.1</div>
+
+
+
+
+        
+
+
+
+
+
+
+
+
+        
+      </div>
+    </footer>
+
+    
+
+    
+
+    
+
+    
+  </div>
+
+  
+
+<script>
+  if (Object.prototype.toString.call(window.Promise) !== '[object Function]') {
+    window.Promise = null;
+  }
+</script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  
+  <script src="/lib/jquery/index.js?v=2.1.3"></script>
+
+  
+  <script src="/lib/velocity/velocity.min.js?v=1.2.1"></script>
+
+  
+  <script src="/lib/velocity/velocity.ui.min.js?v=1.2.1"></script>
+
+
+  
+
+
+  <script src="/js/utils.js?v=7.1.1"></script>
+
+  <script src="/js/motion.js?v=7.1.1"></script>
+
+
+
+  
+  
+
+
+  <script src="/js/affix.js?v=7.1.1"></script>
+
+  <script src="/js/schemes/pisces.js?v=7.1.1"></script>
+
+
+
+  
+  <script src="/js/scrollspy.js?v=7.1.1"></script>
+<script src="/js/post-details.js?v=7.1.1"></script>
+
+
+
+  
+
+
+  <script src="/js/next-boot.js?v=7.1.1"></script>
+
+
+  
+
+  
+
+  
+
+  
+
+
+  
+
+
+  
+
+
+
+
+  
+
+  
+
+  
+
+  
+
+  
+
+  
+
+  
+
+  
+
+  
+
+  
+
+  
+
+  
+
+  
+
+  
+
+</body>
+</html>

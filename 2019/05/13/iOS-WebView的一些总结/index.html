@@ -96,16 +96,18 @@
 
 
 
-  <meta name="description" content="守护心中的那一亩田">
-<meta property="og:type" content="website">
-<meta property="og:title" content="Alex&#39;s Blog">
-<meta property="og:url" content="http://yoursite.com/categories/iOS/index.html">
+  <meta name="description" content="app开发中一些重运营业务大多都通过web来实现快速迭代，iOS可以使用UIWebView、WKWebView实现Native和Web的交互。之前在项目中负责过WebView模块，所以在这里做一些WebView的总结，主要从包括以下一些点：   为什么要封装WebView JSBridge 离线包 WKWebView  为什么要封装WebView我们项目中把WebView封装成了一个ViewCo">
+<meta name="keywords" content="iOS,WebView">
+<meta property="og:type" content="article">
+<meta property="og:title" content="iOS WebView的一些总结">
+<meta property="og:url" content="http://yoursite.com/2019/05/13/iOS-WebView的一些总结/index.html">
 <meta property="og:site_name" content="Alex&#39;s Blog">
-<meta property="og:description" content="守护心中的那一亩田">
+<meta property="og:description" content="app开发中一些重运营业务大多都通过web来实现快速迭代，iOS可以使用UIWebView、WKWebView实现Native和Web的交互。之前在项目中负责过WebView模块，所以在这里做一些WebView的总结，主要从包括以下一些点：   为什么要封装WebView JSBridge 离线包 WKWebView  为什么要封装WebView我们项目中把WebView封装成了一个ViewCo">
 <meta property="og:locale" content="default">
+<meta property="og:updated_time" content="2019-05-13T13:11:09.247Z">
 <meta name="twitter:card" content="summary">
-<meta name="twitter:title" content="Alex&#39;s Blog">
-<meta name="twitter:description" content="守护心中的那一亩田">
+<meta name="twitter:title" content="iOS WebView的一些总结">
+<meta name="twitter:description" content="app开发中一些重运营业务大多都通过web来实现快速迭代，iOS可以使用UIWebView、WKWebView实现Native和Web的交互。之前在项目中负责过WebView模块，所以在这里做一些WebView的总结，主要从包括以下一些点：   为什么要封装WebView JSBridge 离线包 WKWebView  为什么要封装WebView我们项目中把WebView封装成了一个ViewCo">
 
 
 
@@ -113,7 +115,7 @@
 
   
   
-  <link rel="canonical" href="http://yoursite.com/categories/iOS/">
+  <link rel="canonical" href="http://yoursite.com/2019/05/13/iOS-WebView的一些总结/">
 
 
 
@@ -123,7 +125,7 @@
   };
 </script>
 
-  <title>Category: iOS | Alex's Blog</title>
+  <title>iOS WebView的一些总结 | Alex's Blog</title>
   
 
 
@@ -171,7 +173,7 @@
     
   
 
-  <div class="container sidebar-position-left ">
+  <div class="container sidebar-position-left page-post-detail">
     <div class="headband"></div>
 
     <header id="header" class="header" itemscope itemtype="http://schema.org/WPHeader">
@@ -264,7 +266,7 @@
         
         
           
-          <li class="menu-item menu-item-categories menu-item-active">
+          <li class="menu-item menu-item-categories">
 
     
     
@@ -323,213 +325,225 @@
           
             
 
-    
-    
-      
-      
-    
-      
-      
-    
-      
-      
-    
-      
-      
-    
-      
-      
-    
-    
-
-  
-
-
           
           <div id="content" class="content">
             
 
+  <div id="posts" class="posts-expand">
+    
+
+  
+
   
   
   
-  <div class="post-block category">
 
-    <div id="posts" class="posts-collapse">
-      <div class="collection-title">
-        <h1>iOS<small>Category</small>
-        </h1>
-      </div>
-
-      
-        
+  
 
   <article class="post post-type-normal" itemscope itemtype="http://schema.org/Article">
-    <header class="post-header">
+  
+  
+  
+  <div class="post-block">
+    <link itemprop="mainEntityOfPage" href="http://yoursite.com/2019/05/13/iOS-WebView的一些总结/">
 
-      <h2 class="post-title">
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="name" content="Alex Ting">
+      <meta itemprop="description" content="守护心中的那一亩田">
+      <meta itemprop="image" content="/images/avatar.gif">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Alex's Blog">
+    </span>
+
+    
+      <header class="post-header">
+
         
-          <a class="post-title-link" href="/2019/05/13/objc-msgSend汇编源码分析/" itemprop="url">
-            
-              <span itemprop="name">objc_msgSend汇编源码分析</span>
-            
-          </a>
         
-      </h2>
+          <h1 class="post-title" itemprop="name headline">iOS WebView的一些总结
 
-      <div class="post-meta">
-        <time class="post-time" itemprop="dateCreated" datetime="2019-05-13T21:19:00+08:00" content="2019-05-13">
-          05-13
-        </time>
-      </div>
+              
+            
+          </h1>
+        
 
-    </header>
-  </article>
+        <div class="post-meta">
+          <span class="post-time">
 
+            
+            
+            
+
+            
+              <span class="post-meta-item-icon">
+                <i class="fa fa-calendar-o"></i>
+              </span>
+              
+                <span class="post-meta-item-text">Posted on</span>
+              
+
+              
+                
+              
+
+              <time title="Created: 2019-05-13 21:07:48 / Modified: 21:11:09" itemprop="dateCreated datePublished" datetime="2019-05-13T21:07:48+08:00">2019-05-13</time>
+            
+
+            
+              
+
+              
+            
+          </span>
+
+          
+            <span class="post-category">
+            
+              <span class="post-meta-divider">|</span>
+            
+              <span class="post-meta-item-icon">
+                <i class="fa fa-folder-o"></i>
+              </span>
+              
+                <span class="post-meta-item-text">In</span>
+              
+              
+                <span itemprop="about" itemscope itemtype="http://schema.org/Thing"><a href="/categories/iOS/" itemprop="url" rel="index"><span itemprop="name">iOS</span></a></span>
+
+                
+                
+              
+            </span>
+          
+
+          
+            
+            
+          
+
+          
+          
+
+          
+
+          
+
+          
+
+        </div>
+      </header>
+    
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
 
       
-        
-
-  <article class="post post-type-normal" itemscope itemtype="http://schema.org/Article">
-    <header class="post-header">
-
-      <h2 class="post-title">
-        
-          <a class="post-title-link" href="/2019/05/13/深入理解Core-Text排版引擎/" itemprop="url">
-            
-              <span itemprop="name">深入理解Core Text排版引擎</span>
-            
-          </a>
-        
-      </h2>
-
-      <div class="post-meta">
-        <time class="post-time" itemprop="dateCreated" datetime="2019-05-13T21:17:53+08:00" content="2019-05-13">
-          05-13
-        </time>
-      </div>
-
-    </header>
-  </article>
-
+      
 
       
-        
-
-  <article class="post post-type-normal" itemscope itemtype="http://schema.org/Article">
-    <header class="post-header">
-
-      <h2 class="post-title">
-        
-          <a class="post-title-link" href="/2019/05/13/iOS-App自动监控Zombie对象方案/" itemprop="url">
-            
-              <span itemprop="name">iOS App自动监控Zombie对象方案</span>
-            
-          </a>
-        
-      </h2>
-
-      <div class="post-meta">
-        <time class="post-time" itemprop="dateCreated" datetime="2019-05-13T21:15:27+08:00" content="2019-05-13">
-          05-13
-        </time>
-      </div>
-
-    </header>
-  </article>
-
-
-      
-        
-
-  <article class="post post-type-normal" itemscope itemtype="http://schema.org/Article">
-    <header class="post-header">
-
-      <h2 class="post-title">
-        
-          <a class="post-title-link" href="/2019/05/13/UITableView常见Crash案例分析/" itemprop="url">
-            
-              <span itemprop="name">UITableView常见Crash案例分析</span>
-            
-          </a>
-        
-      </h2>
-
-      <div class="post-meta">
-        <time class="post-time" itemprop="dateCreated" datetime="2019-05-13T21:14:20+08:00" content="2019-05-13">
-          05-13
-        </time>
-      </div>
-
-    </header>
-  </article>
-
-
-      
-        
-
-  <article class="post post-type-normal" itemscope itemtype="http://schema.org/Article">
-    <header class="post-header">
-
-      <h2 class="post-title">
-        
-          <a class="post-title-link" href="/2019/05/13/iOS-Crash-log符号化庖丁解牛/" itemprop="url">
-            
-              <span itemprop="name">iOS Crash log符号化庖丁解牛</span>
-            
-          </a>
-        
-      </h2>
-
-      <div class="post-meta">
-        <time class="post-time" itemprop="dateCreated" datetime="2019-05-13T21:13:01+08:00" content="2019-05-13">
-          05-13
-        </time>
-      </div>
-
-    </header>
-  </article>
-
-
-      
-        
-
-  <article class="post post-type-normal" itemscope itemtype="http://schema.org/Article">
-    <header class="post-header">
-
-      <h2 class="post-title">
-        
-          <a class="post-title-link" href="/2019/05/13/iOS-WebView的一些总结/" itemprop="url">
-            
-              <span itemprop="name">iOS WebView的一些总结</span>
-            
-          </a>
-        
-      </h2>
-
-      <div class="post-meta">
-        <time class="post-time" itemprop="dateCreated" datetime="2019-05-13T21:07:48+08:00" content="2019-05-13">
-          05-13
-        </time>
-      </div>
-
-    </header>
-  </article>
-
+        <blockquote>
+<p>app开发中一些重运营业务大多都通过web来实现快速迭代，iOS可以使用UIWebView、WKWebView实现Native和Web的交互。之前在项目中负责过WebView模块，所以在这里做一些WebView的总结，主要从包括以下一些点：</p>
+</blockquote>
+<ol>
+<li>为什么要封装WebView</li>
+<li>JSBridge</li>
+<li>离线包</li>
+<li>WKWebView</li>
+</ol>
+<h2 id="为什么要封装WebView"><a href="#为什么要封装WebView" class="headerlink" title="为什么要封装WebView"></a>为什么要封装WebView</h2><p>我们项目中把WebView封装成了一个ViewController，可能很多人会觉得iOS里要现实web不就直接用UIWebView和WKWebView吗，为什么还要进行封装，我觉的主要是从下面点来考虑：</p>
+<ol>
+<li>统一ui样式。包括导航条，进度条，错误页面等，避免重复造轮子。</li>
+<li>封装基础能力。抽象业务无关的基础能力，比如导航条设置（更改导航条颜色，设置ButtonItem）、cookie设置、UA设置、JSBridge、数据上报等</li>
+<li>hook request。进行安全校验，鉴权处理</li>
+</ol>
+<h2 id="JSBridge"><a href="#JSBridge" class="headerlink" title="JSBridge"></a>JSBridge</h2><p>iOS SDK 直接支持native调用js，UIWebView调用stringByEvaluatingJavaScriptFromString，WKWebView调用evaluateJavaScript: completionHandler</p>
+<p>iOS SDK 没有天生支持 js 和 native 相互调用，都是自己实现一套调用机制，目前主要有下面几种方法:</p>
+<ol>
+<li>通过iframe<br>通过创建iframe，然后在webview delegate hook请求</li>
+<li>JavaScriptCore<br>iOS 7开始引进了JavaScriptCore可以方便高效实现JS和oc之间的调用</li>
+<li>WKScriptMessageHandler<br>WKWebView可以使用WKScriptMessageHandler来实现JS调用oc方法</li>
+</ol>
+<h2 id="离线包"><a href="#离线包" class="headerlink" title="离线包"></a>离线包</h2><p>主要是通过NSURLProtocol hook request来实现离线包，严格来说跟WebView没半毛钱关系。</p>
+<p>WKWebView<br>iOS8引入了WKWebView，WKWebView使用独立的进程渲染web，解决了UIWebView内存泄漏和crash率高的问题，但是理想虽然很丰满，现实却很骨感，实际使用WKWebView还是会有很多问题。之前在项目中做过切换WKWebView，刚好可以总结下遇到的问题和解决方法，主要有下面问题：</p>
+<ol>
+<li>没法直接设置Cookie<br>WKWebView不使用NSHTTPCookieStorage，所以没法直接设置Cookie，app中web请求一般都会通过cookie带登录态到后台，如果没法设置cookie的话是没法正常工作的。尝试过几种方案后我们最终是通过request header把cookie带到server，同时通过WKUserScript把cookie种到本地。</li>
+<li>不经过URL Load System<br>这样就不能使用NSURLProtocol来实现离线包和定制request了</li>
+</ol>
 
       
     </div>
 
+    
+
+    
+    
+    
+
+    
+
+    
+      
+    
+    
+
+    
+
+    <footer class="post-footer">
+      
+        <div class="post-tags">
+          
+            <a href="/tags/iOS/" rel="tag"># iOS</a>
+          
+            <a href="/tags/WebView/" rel="tag"># WebView</a>
+          
+        </div>
+      
+
+      
+      
+      
+
+      
+        <div class="post-nav">
+          <div class="post-nav-next post-nav-item">
+            
+          </div>
+
+          <span class="post-nav-divider"></span>
+
+          <div class="post-nav-prev post-nav-item">
+            
+              <a href="/2019/05/13/iOS-Crash-log符号化庖丁解牛/" rel="prev" title="iOS Crash log符号化庖丁解牛">
+                iOS Crash log符号化庖丁解牛 <i class="fa fa-chevron-right"></i>
+              </a>
+            
+          </div>
+        </div>
+      
+
+      
+      
+    </footer>
   </div>
   
   
   
+  </article>
 
-  
 
+  </div>
 
 
           </div>
           
+
+  
+
+
 
         </div>
         
@@ -549,8 +563,17 @@
       
 
       
+        <ul class="sidebar-nav motion-element">
+          <li class="sidebar-nav-toc sidebar-nav-active" data-target="post-toc-wrap">
+            Table of Contents
+          </li>
+          <li class="sidebar-nav-overview" data-target="site-overview-wrap">
+            Overview
+          </li>
+        </ul>
+      
 
-      <div class="site-overview-wrap sidebar-panel sidebar-panel-active">
+      <div class="site-overview-wrap sidebar-panel">
         <div class="site-overview">
           <div class="site-author motion-element" itemprop="author" itemscope itemtype="http://schema.org/Person">
             
@@ -664,6 +687,23 @@
         </div>
       </div>
 
+      
+      <!--noindex-->
+        <div class="post-toc-wrap motion-element sidebar-panel sidebar-panel-active">
+          <div class="post-toc">
+
+            
+            
+            
+            
+
+            
+              <div class="post-toc-content"><ol class="nav"><li class="nav-item nav-level-2"><a class="nav-link" href="#为什么要封装WebView"><span class="nav-number">1.</span> <span class="nav-text">为什么要封装WebView</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#JSBridge"><span class="nav-number">2.</span> <span class="nav-text">JSBridge</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#离线包"><span class="nav-number">3.</span> <span class="nav-text">离线包</span></a></li></ol></div>
+            
+
+          </div>
+        </div>
+      <!--/noindex-->
       
 
       
@@ -794,6 +834,10 @@
 
 
   
+  <script src="/js/scrollspy.js?v=7.1.1"></script>
+<script src="/js/post-details.js?v=7.1.1"></script>
+
+
 
   
 
@@ -809,6 +853,8 @@
 
   
 
+
+  
 
 
   
