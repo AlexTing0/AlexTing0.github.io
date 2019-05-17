@@ -97,7 +97,7 @@
 
 
   <meta name="description" content="引言Objective-C是通过消息机制调用方法的，编译器会把所有消息发送转为objc_msgSend方法调用。说到objc_msgSend的汇编实现，大多数人会觉的是因为性能高才用汇编实现，几乎没有文章说其它原因。Objective-C所有方法都会转为objc_msgSend方法调用，然而每个方法参数和返回值都可能不一样，参数和返回值要怎么处理？  本文首先会结合Objective-C Runt">
-<meta name="keywords" content="iOS">
+<meta name="keywords" content="ios">
 <meta property="og:type" content="article">
 <meta property="og:title" content="objc_msgSend汇编源码分析">
 <meta property="og:url" content="http://yoursite.com/2019/05/13/objc-msgSend汇编源码分析/index.html">
@@ -109,7 +109,7 @@
 <meta property="og:image" content="https://upload-images.jianshu.io/upload_images/1368199-1318490bd93e4a90.jpg?imageMogr2/auto-orient/strip%7CimageView2/2/w/1240">
 <meta property="og:image" content="https://upload-images.jianshu.io/upload_images/1368199-6b3034fb353a1310.jpg?imageMogr2/auto-orient/strip%7CimageView2/2/w/1240">
 <meta property="og:image" content="https://upload-images.jianshu.io/upload_images/1368199-55ce227b4289cad7.jpg?imageMogr2/auto-orient/strip%7CimageView2/2/w/1240">
-<meta property="og:updated_time" content="2019-05-13T13:19:45.188Z">
+<meta property="og:updated_time" content="2019-05-17T02:21:15.273Z">
 <meta name="twitter:card" content="summary">
 <meta name="twitter:title" content="objc_msgSend汇编源码分析">
 <meta name="twitter:description" content="引言Objective-C是通过消息机制调用方法的，编译器会把所有消息发送转为objc_msgSend方法调用。说到objc_msgSend的汇编实现，大多数人会觉的是因为性能高才用汇编实现，几乎没有文章说其它原因。Objective-C所有方法都会转为objc_msgSend方法调用，然而每个方法参数和返回值都可能不一样，参数和返回值要怎么处理？  本文首先会结合Objective-C Runt">
@@ -394,12 +394,24 @@
                 
               
 
-              <time title="Created: 2019-05-13 21:19:00 / Modified: 21:19:45" itemprop="dateCreated datePublished" datetime="2019-05-13T21:19:00+08:00">2019-05-13</time>
+              <time title="Created: 2019-05-13 21:19:00" itemprop="dateCreated datePublished" datetime="2019-05-13T21:19:00+08:00">2019-05-13</time>
             
 
             
               
 
+              
+                
+                <span class="post-meta-divider">|</span>
+                
+
+                <span class="post-meta-item-icon">
+                  <i class="fa fa-calendar-check-o"></i>
+                </span>
+                
+                  <span class="post-meta-item-text">Edited on</span>
+                
+                <time title="Modified: 2019-05-17 10:21:15" itemprop="dateModified" datetime="2019-05-17T10:21:15+08:00">2019-05-17</time>
               
             
           </span>
@@ -416,7 +428,7 @@
                 <span class="post-meta-item-text">In</span>
               
               
-                <span itemprop="about" itemscope itemtype="http://schema.org/Thing"><a href="/categories/iOS/" itemprop="url" rel="index"><span itemprop="name">iOS</span></a></span>
+                <span itemprop="about" itemscope itemtype="http://schema.org/Thing"><a href="/categories/ios/" itemprop="url" rel="index"><span itemprop="name">ios</span></a></span>
 
                 
                 
@@ -537,7 +549,7 @@
       
         <div class="post-tags">
           
-            <a href="/tags/iOS/" rel="tag"># iOS</a>
+            <a href="/tags/ios/" rel="tag"># ios</a>
           
         </div>
       
@@ -681,7 +693,9 @@
                     
                       
                     
-                    <span class="site-state-item-count">4</span>
+                      
+                    
+                    <span class="site-state-item-count">5</span>
                     <span class="site-state-item-name">tags</span>
                   </a>
                 </div>
